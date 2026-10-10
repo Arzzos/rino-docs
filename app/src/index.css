@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+:root {
+  --tesci: #1e3a5f;
+  --tesci-accent: #c9a227;
+}
+
+html, body {
+  background: #0f172a;
+}
+
+.touch-btn {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+input, select, textarea {
+  font-size: 16px; /* evita zoom iOS */
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reveal { animation: rise .35s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+}
