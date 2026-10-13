@@ -20,6 +20,37 @@ export interface IndicadorAlcance {
   valor: number | null
 }
 
+/** Texto de una línea por indicador. Sin valor no se agrega "|". */
+export function formatearIndicadores(inds: IndicadorAlcance[]): string {
+  return inds
+    .map((x) => (x.valor == null ? `${x.letra}) ${x.descripcion}` : `${x.letra}) ${x.descripcion} | ${x.valor}`))
+    .join('\n')
+}
+
+/** Convierte el texto libre del editor a indicadores. Tolera letra
+ *  opcional y "|" sin número para poder borrarlo sin que reaparezca. */
+export function parsearIndicadoresTexto(texto: string): IndicadorAlcance[] {
+  return texto
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l !== '')
+    .map((l) => {
+      const m = l.match(/^\s*([A-Za-z])\)\s*(.*)$/)
+      const letra = (m?.[1] ?? '?').toUpperCase()
+      let resto = (m?.[2] ?? l).trim()
+      let valor: number | null = null
+      const mv = resto.match(/^(.*)\|\s*(\d+)\s*$/)
+      if (mv) {
+        resto = mv[1].trim()
+        valor = parseInt(mv[2], 10)
+      } else {
+        resto = resto.replace(/\|\s*$/, '').trim()
+      }
+      return { letra, descripcion: resto, valor }
+    })
+    .filter((x) => x.descripcion !== '')
+}
+
 export interface Competencia {
   numero: string // "1", "4/5", "1,2,3"
   descripcion: string
