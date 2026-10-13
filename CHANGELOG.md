@@ -2,6 +2,11 @@
 
 Formato: Keep a Changelog + SemVer. Entradas bilingües (ES/EN) por release. / Format: Keep a Changelog + SemVer. Bilingual entries per release.
 
+## [Unreleased] / [Sin publicar]
+
+### Cambiado / Changed
+- Despliegue por dashboard de Cloudflare Pages (integración Git) como vía principal; `ci.yml` queda solo con `check` (sin job `deploy` ni secrets). / Dashboard deploys as the primary path; `ci.yml` now checks only.
+
 ## [0.1.0-alpha] — 2026-10-13
 
 ### Añadido / Added
