@@ -131,12 +131,15 @@ export interface Portafolio {
 }
 
 export const DIVISIONES_TESCI = [
-  'Ingeniería en Tecnologías de la Información y Comunicaciones',
-  'Ingeniería en Sistemas Computacionales',
   'Ingeniería Industrial',
+  'Ingeniería en Gestión Empresarial',
+  'Ingeniería en Sistemas Computacionales',
+  'Ingeniería en Tecnologías de la Información y Comunicaciones',
+  'Ingeniería en Logística',
   'Ingeniería Mecatrónica',
   'Ingeniería Química',
-  'Licenciatura en Administración',
+  'Ingeniería en Administración',
+  'Ingeniería en Semiconductores',
   'Contador Público',
 ] as const
 
