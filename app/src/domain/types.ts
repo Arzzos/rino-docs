@@ -1,11 +1,17 @@
-// Domain — entidades puras, sin imports de frameworks.
-// Reglas TESCI: FO-205P11000-14 (10 campos) y FO-205P11000-44 (instrumentación).
+// Entidades puras del dominio (sin frameworks).
+// FO-205P11000-14 (10 campos) y FO-205P11000-44 (instrumentación).
 
 export interface Alumno {
   nombreCompleto: string
   numeroControl: string
   division: string
   grupo: string
+}
+
+/** Integrante extra de equipo (manual por evidencia, campo 5). */
+export interface Integrante {
+  nombre: string
+  control: string
 }
 
 export interface IndicadorAlcance {
@@ -37,17 +43,44 @@ export interface Instrumentacion {
   originalMime: string
   originalBytesBase64: string
   originalOrientacion: 'portrait' | 'landscape'
+  /** PDF convertido del DOCX al cargarlo. */
+  pdfBytesBase64?: string
+  pdfPaginas?: number
   necesitaRevision: boolean
   parseConfianza: number // 0..1
   creadaEn: number
 }
 
+/** Evaluación diagnóstica: independiente de competencia, general por materia. */
+export interface Diagnostica {
+  id: string
+  asignaturaId: string
+  nombreHoja: string // ej. "Examen diagnóstico"
+  imagenDataUrl: string
+  ancho: number
+  alto: number
+  escala: number // 0.25..1 ajuste manual
+  creadaEn: number
+}
+
 export type BloqueContenido =
   | { id: string; tipo: 'texto'; texto: string }
-  | { id: string; tipo: 'codigo'; lenguaje: string; texto: string }
+  | { id: string; tipo: 'subtitulo'; texto: string }
+  | { id: string; tipo: 'salto' }
+  | { id: string; tipo: 'codigo'; lenguaje: LenguajeCodigo; texto: string }
   | { id: string; tipo: 'tabla'; encabezados: string[]; filas: string[][] }
-  | { id: string; tipo: 'imagen'; dataUrl: string; pie?: string; anchoOriginal: number; altoOriginal: number }
+  | { id: string; tipo: 'imagen'; dataUrl: string; pie?: string; anchoOriginal: number; altoOriginal: number; anchoPct: number; escala: number }
   | { id: string; tipo: 'referencia'; texto: string; url?: string }
+
+export type LenguajeCodigo = 'python' | 'java' | 'c' | 'sql' | 'texto'
+
+export const LENGUAJES_CODIGO: { id: LenguajeCodigo; label: string }[] = [
+  { id: 'python', label: 'Python' },
+  { id: 'java', label: 'Java' },
+  { id: 'c', label: 'C' },
+  { id: 'sql', label: 'SQL' },
+  { id: 'texto', label: 'Texto plano' },
+]
 
 export interface Evidencia {
   id: string
@@ -59,6 +92,8 @@ export interface Evidencia {
   docente: string
   alumnoNombre: string
   numeroControl: string
+  /** Equipo extra: se capturan manualmente por evidencia (no todas son en equipo). */
+  integrantes: Integrante[]
   fechaEntrega: string
   competenciaNo: string
   descripcionCompetencia: string
@@ -69,11 +104,22 @@ export interface Evidencia {
   actualizadaEn: number
 }
 
+export type GrupoSeccion = 'portada' | 'indice' | 'instrumentacion' | 'diagnostica' | 'contenido'
+
 export interface PortafolioSeccion {
   id: string
-  tipo: 'portada' | 'indice' | 'instrumentacion' | 'portada-competencia' | 'evidencia'
+  tipo: 'portada' | 'indice' | 'instrumentacion' | 'diagnostica' | 'portada-competencia' | 'evidencia'
   titulo: string
-  refId?: string // competencia.numero o evidencia.id
+  refId?: string // competencia.numero | evidencia.id | diagnostica.id
+  grupo: GrupoSeccion
+}
+
+/** Orden fijo de grupos; dentro de cada grupo el usuario ordena libremente. */
+export const ORDEN_GRUPOS: GrupoSeccion[] = ['portada', 'indice', 'instrumentacion', 'diagnostica', 'contenido']
+
+export function grupoDe(tipo: PortafolioSeccion['tipo']): GrupoSeccion {
+  if (tipo === 'portada' || tipo === 'indice' || tipo === 'instrumentacion' || tipo === 'diagnostica') return tipo
+  return 'contenido'
 }
 
 export interface Portafolio {
@@ -86,8 +132,8 @@ export interface Portafolio {
 
 export const DIVISIONES_TESCI = [
   'Ingeniería en Tecnologías de la Información y Comunicaciones',
-  'Ingeniería Industrial',
   'Ingeniería en Sistemas Computacionales',
+  'Ingeniería Industrial',
   'Ingeniería Mecatrónica',
   'Ingeniería Química',
   'Licenciatura en Administración',
@@ -106,7 +152,7 @@ export function validarEvidencia(e: Evidencia): string[] {
   if (!e.descripcionCompetencia.trim()) errores.push('Descripción (8) requerida')
   if (e.indicadoresSeleccionados.length === 0) errores.push('Indicador de alcance (9): selecciona al menos uno')
   if (!e.nombreEvidencia.trim()) errores.push('Evidencia de aprendizaje (10) requerida')
-  if (e.bloques.length === 0) errores.push('Agrega al menos un bloque de contenido')
+  if (e.bloques.filter((b) => b.tipo !== 'salto').length === 0) errores.push('Agrega al menos un bloque de contenido')
   return errores
 }
 

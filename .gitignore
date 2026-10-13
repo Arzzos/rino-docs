@@ -1,0 +1,32 @@
+# Documentos de referencia para test.
+*.docx
+*.pdf
+
+# Dependencias y compilados
+node_modules/
+dist/
+dist-ssr/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Locales y editores
+*.local
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Cloudflare /wrangler local
+.wrangler/
+.dev.vars*

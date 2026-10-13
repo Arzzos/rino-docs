@@ -1,17 +1,24 @@
 {
   "name": "app",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0-alpha",
+  "license": "MIT",
+  "author": "Rasiel Aztontli Espinal González (https://arzzos.com)",
+  "homepage": "https://rinodocs.arzzos.com",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "deploy": "wrangler pages deploy dist --project-name rino-docs"
   },
   "dependencies": {
     "dexie": "^4.4.6",
+    "highlight.js": "^11.12.0",
     "jszip": "^3.10.2",
+    "lucide-react": "^1.54.0",
     "mammoth": "^1.13.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.4.299",
@@ -30,6 +37,8 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
-    "vite-plugin-pwa": "^2.0.0"
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.3",
+    "wrangler": "^4.149.0"
   }
 }

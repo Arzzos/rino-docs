@@ -1,241 +1,257 @@
-// Infrastructure: motor de exportación PDF FO-205P11000-14 (réplica exacta).
-// Client-side con pdf-lib. Letter portrait 612x792pt, márgenes del .docx real:
-// top/bottom 70.85pt, laterales 85.05pt. Membretes PNG del header/footer original.
-// Primera imagen contenida para no desalinear membretes; resto en flujo libre.
+// Exportación PDF del FO-205P11000-14.
+// Rejilla de 9 columnas, equipo en el campo (5), imágenes ajustadas a carta
+// y bloques de código con resaltado por lenguaje.
 
-import { PDFDocument, PDFFont, PDFImage, rgb, type PDFPage } from 'pdf-lib'
+import { PDFDocument, rgb } from 'pdf-lib'
 import type { Evidencia } from '../domain/types'
-import { dataUrlToBytes } from './imageOptimizer'
+import { resaltarTokens, tokensPorLinea } from './codeHighlight'
+import {
+  AZUL_TESCI, CONTENT_W, FONDO_CODIGO, FONDO_ETIQUETA, GRIS, M_B, M_L, CARTA_W,
+  NEGRO, asegurar, crearTema, nuevoFlujo, paginaConMembrete, parrafo, sanearWinAnsi, tituloCentrado, wrap, FOOTER_H,
+  type Flujo,
+} from './pdfTheme'
 
-const LETTER_W = 612
-const LETTER_H = 792
-const M_L = 85.05
-const M_R = 85.05
-const M_T = 70.85
-const M_B = 70.85
-const HEADER_H = 52
-const FOOTER_H = 34
-const AZUL = rgb(0.12, 0.23, 0.37)
-const GRIS = rgb(0.35, 0.35, 0.35)
-const NEGRO = rgb(0, 0, 0)
+const FS = 8
+const BLANCO = rgb(1, 1, 1)
 
-async function fetchBytes(url: string): Promise<Uint8Array | null> {
-  try {
-    const r = await fetch(url)
-    if (!r.ok) return null
-    return new Uint8Array(await r.arrayBuffer())
-  } catch {
-    return null
-  }
-}
+interface Par { etiqueta: string; anchoEtiqueta: number; valor: string; anchoValor: number }
 
-interface Ctx {
-  doc: PDFDocument
-  helv: PDFFont
-  helvB: PDFFont
-  cour: PDFFont
-  page: PDFPage
-  y: number
-  primeraPagina: boolean
-  primeraImagenUsada: boolean
-}
-
-function nuevaPagina(c: Ctx, headerImg?: PDFImage, footerImg?: PDFImage) {
-  c.page = c.doc.addPage([LETTER_W, LETTER_H])
-  c.y = LETTER_H - M_T
-  dibujarMembretes(c, headerImg, footerImg)
-  c.primeraPagina = false
-}
-
-function dibujarMembretes(c: Ctx, headerImg?: PDFImage, footerImg?: PDFImage) {
-  const p = c.page
-  if (headerImg) {
-    const w = LETTER_W - 40
-    const h = w * (headerImg.height / headerImg.width)
-    const hh = Math.min(h, HEADER_H)
-    p.drawImage(headerImg, { x: 20, y: LETTER_H - 12 - hh, width: w, height: hh })
-  }
-  if (footerImg) {
-    const w = LETTER_W - 40
-    const h = w * (footerImg.height / footerImg.width)
-    const fh = Math.min(h, FOOTER_H)
-    p.drawImage(footerImg, { x: 20, y: 10, width: w, height: fh })
-  }
-}
-
-function wrap(texto: string, font: PDFFont, size: number, maxW: number): string[] {
-  const palabras = texto.split(/\s+/)
-  const lineas: string[] = []
-  let cur = ''
-  for (const w of palabras) {
-    const t = cur ? cur + ' ' + w : w
-    if (font.widthOfTextAtSize(t, size) > maxW && cur) {
-      lineas.push(cur)
-      cur = w
-    } else cur = t
-  }
-  if (cur) lineas.push(cur)
-  return lineas
-}
-
-function asegurar(c: Ctx, alto: number, hi?: PDFImage, fi?: PDFImage) {
-  const limite = M_B + 20
-  if (c.y - alto < limite) nuevaPagina(c, hi, fi)
-}
-
-function texto(c: Ctx, t: string, size: number, font: PDFFont, color = NEGRO, inter = 2, x?: number) {
-  const maxW = LETTER_W - M_L - M_R
-  for (const ln of wrap(t, font, size, x !== undefined ? LETTER_W - M_R - x : maxW)) {
-    asegurar(c, size + inter + 2, undefined, undefined)
-    c.page.drawText(ln, { x: x ?? M_L, y: c.y - size, size, font, color })
-    c.y -= size + inter
-  }
-}
-
-function filaCampo(c: Ctx, etiqueta: string, valor: string) {
-  const maxW = LETTER_W - M_L - M_R
-  const fs = 8.2
-  const label = etiqueta + ' '
-  const lw = c.helvB.widthOfTextAtSize(label, fs)
-  const lineas = wrap(valor || '—', c.helv, fs, maxW - lw)
-  const alto = Math.max(1, lineas.length) * (fs + 2) + 5
-  asegurar(c, alto)
-  const yTop = c.y
-  // fondo etiqueta sutil + bordes
-  c.page.drawRectangle({ x: M_L, y: yTop - alto, width: maxW, height: alto, borderColor: NEGRO, borderWidth: 0.7 })
-  c.page.drawText(label, { x: M_L + 4, y: yTop - fs - 3.5, size: fs, font: c.helvB, color: AZUL })
-  lineas.forEach((ln, i) => {
-    c.page.drawText(ln, { x: M_L + 4 + (i === 0 ? lw : 0), y: yTop - fs - 3.5 - i * (fs + 2), size: fs, font: c.helv })
+/** Dibuja una fila de pares etiqueta|valor. Etiqueta sombreada, valor blanco. */
+function filaPares(f: Flujo, x0: number, pares: Par[]) {
+  const med = pares.map((p) => {
+    const etiq = wrap(p.etiqueta, f.t.helvB, FS, p.anchoEtiqueta - 6)
+    const val = wrap(p.valor || '—', f.t.helv, FS, p.anchoValor - 6)
+    return { etiq, val, n: Math.max(etiq.length, val.length, 1) }
   })
-  if (lineas.length === 0) c.y = yTop - alto
-  else c.y = yTop - alto
-  c.y -= 3
+  const alto = Math.max(...med.map((m) => m.n)) * (FS + 2.4) + 6
+  asegurar(f, alto + 1)
+  const yTop = f.y
+  let x = x0
+  pares.forEach((p, i) => {
+    const m = med[i]
+    f.page.drawRectangle({ x, y: yTop - alto, width: p.anchoEtiqueta, height: alto, borderColor: NEGRO, borderWidth: 0.7, color: FONDO_ETIQUETA })
+    m.etiq.forEach((ln, j) => {
+      f.page.drawText(ln, { x: x + 3, y: yTop - FS - 3.5 - j * (FS + 2.4), size: FS, font: f.t.helvB, color: AZUL_TESCI })
+    })
+    const xv = x + p.anchoEtiqueta
+    f.page.drawRectangle({ x: xv, y: yTop - alto, width: p.anchoValor, height: alto, borderColor: NEGRO, borderWidth: 0.7, color: BLANCO })
+    m.val.forEach((ln, j) => {
+      f.page.drawText(ln, { x: xv + 3, y: yTop - FS - 3.5 - j * (FS + 2.4), size: FS, font: f.t.helv })
+    })
+    x += p.anchoEtiqueta + p.anchoValor
+  })
+  f.y = yTop - alto
 }
 
-export async function generarEvidenciaPDF(e: Evidencia): Promise<Uint8Array> {
+function hexAColor(hex: string) {
+  const n = parseInt(hex.slice(1), 16)
+  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255)
+}
+
+export async function generarEvidenciaPDF(e: Evidencia, mapaIndicadores?: Record<string, string>): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
   doc.setTitle(`FO-205P11000-14 — ${e.nombreEvidencia}`)
   doc.setAuthor(`${e.alumnoNombre} ${e.numeroControl}`)
-  const helv = await doc.embedFont((await import('pdf-lib')).StandardFonts.Helvetica)
-  const helvB = await doc.embedFont((await import('pdf-lib')).StandardFonts.HelveticaBold)
-  const cour = await doc.embedFont((await import('pdf-lib')).StandardFonts.Courier)
+  // Creator persiste al guardar (la autoría vive solo en metadata).
+  doc.setCreator('Rino Docs (offline-first)')
+  const t = await crearTema(doc)
+  const f = nuevoFlujo(t)
+  const x0 = M_L + (CONTENT_W - 473.2) / 2
+  const C = (a: number, b: number) => a + b // alias legible
 
-  const [hBytes, fBytes] = await Promise.all([
-    fetchBytes(`${import.meta.env.BASE_URL}membretes/tesci-header.png`),
-    fetchBytes(`${import.meta.env.BASE_URL}membretes/tesci-footer.png`),
+  tituloCentrado(f, 'DIRECCIÓN ACADÉMICA', 10, true, AZUL_TESCI)
+  tituloCentrado(f, 'Formato de entrega de evidencias', 11, true)
+  tituloCentrado(f, 'FO-205P11000-14', 8, true, GRIS)
+  f.y -= 4
+
+  const nombres5 = [`${e.alumnoNombre} ${e.numeroControl}`.trim(), ...e.integrantes.map((x) => `${x.nombre} ${x.control}`.trim())].filter(Boolean).join('\n')
+  // Indicador de alcance (9): uno por línea, letra + contenido.
+  const indicadores9 = e.indicadoresSeleccionados
+    .map((l) => (mapaIndicadores?.[l] ? `${l}) ${mapaIndicadores[l]}` : l))
+    .join('\n')
+  void C
+
+  filaPares(f, x0, [
+    { etiqueta: 'División: (1)', anchoEtiqueta: 76.25, valor: e.division, anchoValor: 283.55 },
+    { etiqueta: 'Grupo: (2)', anchoEtiqueta: 49.6, valor: e.grupo, anchoValor: 63.8 },
   ])
-  const headerImg = hBytes ? await doc.embedPng(hBytes) : undefined
-  const footerImg = fBytes ? await doc.embedPng(fBytes) : undefined
+  filaPares(f, x0, [
+    { etiqueta: 'Asignatura: (3)', anchoEtiqueta: 76.25, valor: e.asignatura, anchoValor: 169.6 },
+    { etiqueta: 'Docente: (4)', anchoEtiqueta: 64.25, valor: e.docente, anchoValor: 163.1 },
+  ])
+  filaPares(f, x0, [
+    { etiqueta: 'Nombre y número de control: (5)', anchoEtiqueta: 218.05, valor: nombres5, anchoValor: 255.15 },
+  ])
+  filaPares(f, x0, [
+    { etiqueta: 'Fecha de entrega: (6)', anchoEtiqueta: 218.05, valor: e.fechaEntrega, anchoValor: 255.15 },
+  ])
+  filaPares(f, x0, [
+    { etiqueta: 'Competencia No.: (7)', anchoEtiqueta: 97.45, valor: e.competenciaNo, anchoValor: 42.55 },
+    { etiqueta: 'Descripción: (8)', anchoEtiqueta: 78.05, valor: e.descripcionCompetencia, anchoValor: 255.15 },
+  ])
+  filaPares(f, x0, [
+    { etiqueta: 'Indicador de alcance: (9)', anchoEtiqueta: 140, valor: indicadores9, anchoValor: 333.2 },
+  ])
+  filaPares(f, x0, [
+    { etiqueta: 'Evidencia de aprendizaje: (10)', anchoEtiqueta: 140, valor: e.nombreEvidencia, anchoValor: 333.2 },
+  ])
+  f.y -= 8
 
-  const c: Ctx = { doc, helv, helvB, cour, page: doc.addPage([LETTER_W, LETTER_H]), y: LETTER_H - M_T, primeraPagina: true, primeraImagenUsada: false }
-  dibujarMembretes(c, headerImg, footerImg)
-  c.y -= (HEADER_H + 6)
-
-  // Títulos institucionales
-  const centrado = (t: string, size: number, bold = false, color = NEGRO) => {
-    const f = bold ? helvB : helv
-    const w = f.widthOfTextAtSize(t, size)
-    asegurar(c, size + 6)
-    c.page.drawText(t, { x: (LETTER_W - w) / 2, y: c.y - size, size, font: f, color })
-    c.y -= size + 5
-  }
-  centrado('DIRECCIÓN ACADÉMICA', 10, true, AZUL)
-  centrado('Formato de entrega de evidencias', 11, true)
-  centrado('FO-205P11000-14', 8, true, GRIS)
-  c.y -= 4
-
-  // Tabla de 10 campos (réplica del .docx)
-  filaCampo(c, 'División: (1)', e.division)
-  filaCampo(c, 'Grupo: (2)', e.grupo)
-  filaCampo(c, 'Asignatura: (3)', e.asignatura)
-  filaCampo(c, 'Docente: (4)', e.docente)
-  filaCampo(c, 'Nombre y número de control: (5)', `${e.alumnoNombre} — ${e.numeroControl}`)
-  filaCampo(c, 'Fecha de entrega: (6)', e.fechaEntrega)
-  filaCampo(c, 'Competencia No.: (7)', e.competenciaNo)
-  filaCampo(c, 'Descripción: (8)', e.descripcionCompetencia)
-  filaCampo(c, 'Indicador de alcance: (9)', e.indicadoresSeleccionados.join(', '))
-  filaCampo(c, 'Evidencia de aprendizaje: (10)', e.nombreEvidencia)
-  c.y -= 6
-
-  // Contenido modular
-  const maxW = LETTER_W - M_L - M_R
+  // Contenido
   for (const b of e.bloques) {
     if (b.tipo === 'texto') {
       for (const par of b.texto.split('\n')) {
-        if (!par.trim()) { c.y -= 6; continue }
-        texto(c, par, 9.5, helv)
-        c.y -= 3
+        if (!par.trim()) { f.y -= 6; continue }
+        parrafo(f, par, { size: 9.5, justificado: true })
+        f.y -= 3
       }
+    } else if (b.tipo === 'subtitulo') {
+      asegurar(f, 22)
+      f.page.drawText(sanearWinAnsi(b.texto).slice(0, 100), { x: M_L, y: f.y - 11, size: 11, font: f.t.helvB })
+      f.y -= 20
+    } else if (b.tipo === 'salto') {
+      const { page, y } = paginaConMembrete(f.t, f.sinFooter ? { sinFooter: true } : undefined)
+      f.page = page
+      f.y = y
+      f.yInicial = y
     } else if (b.tipo === 'codigo') {
-      const lineas = b.texto.split('\n')
-      const alto = lineas.length * 11 + 12
-      asegurar(c, Math.min(alto, 400))
-      // fondo gris
-      const h = Math.min(alto, c.y - (M_B + 20))
-      void h
-      c.page.drawRectangle({ x: M_L, y: c.y - 6 - lineas.length * 11, width: maxW, height: lineas.length * 11 + 10, color: rgb(0.95, 0.95, 0.96), borderColor: GRIS, borderWidth: 0.5 })
-      c.y -= 8
-      for (const ln of lineas) {
-        if (c.y < M_B + 24) nuevaPagina(c, headerImg, footerImg)
-        const recortada = ln.slice(0, 110)
-        c.page.drawText(recortada, { x: M_L + 5, y: c.y - 9, size: 8, font: cour })
-        c.y -= 11
-      }
-      c.y -= 8
+      dibujarCodigo(f, b.lenguaje, b.texto)
     } else if (b.tipo === 'tabla') {
-      const cols = b.encabezados.length
-      const cw = maxW / Math.max(1, cols)
-      const filas = [b.encabezados, ...b.filas]
-      for (let ri = 0; ri < filas.length; ri++) {
-        asegurar(c, 16)
-        filas[ri].forEach((cell, ci) => {
-          const x = M_L + ci * cw
-          c.page.drawRectangle({ x, y: c.y - 14, width: cw, height: 15, borderColor: NEGRO, borderWidth: 0.6, color: ri === 0 ? rgb(0.88, 0.91, 0.95) : undefined })
-          c.page.drawText(String(cell).slice(0, 40), { x: x + 3, y: c.y - 11, size: 7.5, font: ri === 0 ? helvB : helv })
-        })
-        c.y -= 15
-      }
-      c.y -= 6
+      dibujarTabla(f, b.encabezados, b.filas)
     } else if (b.tipo === 'imagen') {
-      const { bytes, esPng } = dataUrlToBytes(b.dataUrl)
-      const img = esPng ? await doc.embedPng(bytes).catch(() => doc.embedJpg(bytes)) : await doc.embedJpg(bytes).catch(() => doc.embedPng(bytes))
-      const ratio = img.height / img.width
-      // Regla anti-membrete: primera imagen de la primera página contenida
-      const esPrimera = c.primeraPagina && !c.primeraImagenUsada
-      const altoMax = esPrimera ? 200 : LETTER_H - M_T - M_B - 120
-      let w = maxW
-      let h = w * ratio
-      if (h > altoMax) { h = altoMax; w = h / ratio }
-      asegurar(c, h + 18)
-      c.page.drawImage(img, { x: M_L + (maxW - w) / 2, y: c.y - h, width: w, height: h })
-      c.y -= h + 4
-      if (b.pie) {
-        asegurar(c, 12)
-        const pw = helv.widthOfTextAtSize(b.pie.slice(0, 90), 7.5)
-        c.page.drawText(b.pie.slice(0, 90), { x: (LETTER_W - pw) / 2, y: c.y - 8, size: 7.5, font: helv, color: GRIS })
-        c.y -= 12
-      }
-      c.y -= 4
-      c.primeraImagenUsada = true
-      void esPrimera
+      await dibujarImagen(f, doc, b.dataUrl, b.pie, b.anchoPct, b.escala)
     } else if (b.tipo === 'referencia') {
-      texto(c, (b.url ? `${b.texto} — ${b.url}` : b.texto), 8.5, helv, GRIS)
-      c.y -= 2
+      parrafo(f, (b.url ? `${b.texto} ${b.url}` : b.texto).trim(), { size: 8.5, color: GRIS, font: f.t.helvI })
+      f.y -= 3
     }
   }
 
-  // Pie institucional
-  c.y -= 8
-  asegurar(c, 24)
-  const pie = 'Documento generado localmente con Rino Docs (offline-first) — FO-205P11000-14'
-  const pw = helv.widthOfTextAtSize(pie, 7)
-  c.page.drawText(pie, { x: (LETTER_W - pw) / 2, y: Math.max(c.y, M_B + 20), size: 7, font: helv, color: GRIS })
+  f.y -= 6
+  // Sin marcas en el contenido: la autoría va solo en metadata.
 
   return doc.save()
 }
 
-export function descargarPDF(bytes: Uint8Array, nombre: string) {
-  const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' })
+function dibujarCodigo(f: Flujo, lenguaje: string, codigo: string) {
+  const lineas = tokensPorLinea(resaltarTokens(sanearWinAnsi(codigo), lenguaje as never, true))
+  const size = 7.5
+  const lh = size + 3.4
+  const numW = 30
+  const maxX = M_L + CONTENT_W - 4
+  const fondo = () => f.page.drawRectangle({ x: M_L, y: f.y - lh, width: CONTENT_W, height: lh + 2, color: FONDO_CODIGO })
+  const barra = () => {
+    asegurar(f, 18)
+    f.page.drawRectangle({ x: M_L, y: f.y - 16, width: CONTENT_W, height: 16, color: rgb(0.16, 0.2, 0.27) })
+    f.page.drawText(lenguaje.toUpperCase(), { x: M_L + 8, y: f.y - 12.5, size: 8, font: f.t.courB, color: rgb(1, 0.85, 0.4) })
+    f.y -= 16
+  }
+  barra()
+  lineas.forEach((toks, idx) => {
+    asegurar(f, lh + 2)
+    fondo()
+    const num = String(idx + 1)
+    f.page.drawText(num, { x: M_L + numW - 6 - f.t.cour.widthOfTextAtSize(num, size), y: f.y - size - 1, size, font: f.t.cour, color: rgb(0.45, 0.5, 0.6) })
+    let x = M_L + numW
+    const encajar = (txt: string): number => {
+      let k = txt.length
+      while (k > 0 && f.t.cour.widthOfTextAtSize(txt.slice(0, k), size) > maxX - x) k--
+      return Math.max(k, 1)
+    }
+    for (const tk of toks) {
+      let rest = tk.texto
+      const color = hexAColor(tk.color)
+      while (rest) {
+        if (f.t.cour.widthOfTextAtSize(rest, size) <= maxX - x) {
+          f.page.drawText(rest, { x, y: f.y - size - 1, size, font: f.t.cour, color })
+          x += f.t.cour.widthOfTextAtSize(rest, size)
+          break
+        }
+        const k = encajar(rest)
+        f.page.drawText(rest.slice(0, k), { x, y: f.y - size - 1, size, font: f.t.cour, color })
+        rest = rest.slice(k)
+        f.y -= lh
+        asegurar(f, lh + 2)
+        fondo()
+        x = M_L + numW
+      }
+    }
+    f.y -= lh
+  })
+  f.y -= 8
+}
+
+function dibujarTabla(f: Flujo, encabezados: string[], filas: string[][]) {
+  const cols = Math.max(1, encabezados.length)
+  const cw = CONTENT_W / cols
+  const size = 7.5
+  const todo = [encabezados, ...filas]
+  for (let ri = 0; ri < todo.length; ri++) {
+    const celdas = todo[ri].map((c, ci) => wrap(String(ci < todo[ri].length ? c : ''), ri === 0 ? f.t.helvB : f.t.helv, size, cw - 6))
+    const alto = Math.max(1, ...celdas.map((c) => c.length)) * (size + 2.4) + 6
+    asegurar(f, alto + 1)
+    const yTop = f.y
+    celdas.forEach((lns, ci) => {
+      const x = M_L + ci * cw
+      f.page.drawRectangle({ x, y: yTop - alto, width: cw, height: alto, borderColor: NEGRO, borderWidth: 0.6, color: ri === 0 ? FONDO_ETIQUETA : undefined })
+      lns.forEach((ln, j) => {
+        f.page.drawText(ln, { x: x + 3, y: yTop - size - 3.5 - j * (size + 2.4), size, font: ri === 0 ? f.t.helvB : f.t.helv })
+      })
+    })
+    f.y = yTop - alto
+  }
+  f.y -= 6
+}
+
+/** Dibuja una imagen ajustada a carta con los ajustes del usuario. */
+export async function dibujarImagen(f: Flujo, doc: PDFDocument, dataUrl: string, pie: string | undefined, anchoPct: number, escala: number) {
+  const { dataUrlToBytes: conv } = await import('./imageOptimizer')
+  const { bytes, esPng } = conv(dataUrl)
+  let img
+  try { img = esPng ? await doc.embedPng(bytes) : await doc.embedJpg(bytes) }
+  catch { try { img = esPng ? await doc.embedJpg(bytes) : await doc.embedPng(bytes) } catch { return } }
+  const ratio = img.height / img.width
+  const pct = Math.min(100, Math.max(25, anchoPct || 100))
+  const esc = Math.min(1, Math.max(0.25, escala || 1))
+  // alto máximo disponible en la página actual (sin invadir footer)
+  const minY = M_B + FOOTER_H + (pie ? 16 : 6)
+  const disp = f.y - minY
+  const paginaLlena = (f.yInicial ?? f.y) - minY
+  // Si no cabe un mínimo razonable, se abre hoja nueva a tamaño completo.
+  // La escala del usuario se respeta.
+  if (disp < 60 || (disp < paginaLlena * 0.55 && f.y < (f.yInicial ?? f.y) - 40)) {
+    const { page, y } = (await import('./pdfTheme')).paginaConMembrete(f.t)
+    f.page = page
+    f.y = y
+    f.yInicial = y
+  }
+  const altoMax = Math.max(60, (f.y - minY) * esc)
+  let w = (CONTENT_W * pct) / 100
+  let h = w * ratio
+  if (h > altoMax) { h = altoMax; w = h / ratio }
+  const x = M_L + (CONTENT_W - w) / 2
+  f.page.drawImage(img, { x, y: f.y - h, width: w, height: h })
+  f.y -= h + 4
+  if (pie) {
+    asegurar(f, 12)
+    const txt = sanearWinAnsi(pie).slice(0, 100)
+    const pw = f.t.helvI.widthOfTextAtSize(txt, 7.5)
+    f.page.drawText(txt, { x: (CARTA_W - pw) / 2, y: f.y - 8, size: 7.5, font: f.t.helvI, color: GRIS })
+    f.y -= 13
+  }
+  f.y -= 5
+}
+
+/** Mapa letra → descripción desde la instrumentación (campo 9). */
+export function mapaDeIndicadores(
+  ev: Evidencia,
+  inst?: { competencias: { numero: string; indicadores: { letra: string; descripcion: string }[] }[] },
+): Record<string, string> {
+  const m: Record<string, string> = {}
+  inst?.competencias.find((c) => c.numero === ev.competenciaNo)?.indicadores.forEach((i) => { m[i.letra] = i.descripcion })
+  return m
+}
+
+export function descargarPDF(bytes: Uint8Array, nombre: string) {  const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -243,4 +259,8 @@ export function descargarPDF(bytes: Uint8Array, nombre: string) {
   document.body.appendChild(a)
   a.click()
   setTimeout(() => { URL.revokeObjectURL(url); a.remove() }, 800)
+}
+
+export function pdfAUrl(bytes: Uint8Array): string {
+  return URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' }))
 }

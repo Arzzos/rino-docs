@@ -1,0 +1,36 @@
+name: Bug report / Reporte de error
+description: Report a bug (Alpha). / Reporta un error (Alpha).
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version / Versión
+      placeholder: "0.1.0-alpha"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / Área
+      options: [Materias/Parser, Evidencias, Portafolio/PDF, PWA/Offline, Deploy, Other/Otro]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / Pasos para reproducir
+      placeholder: "1. ... 2. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual / Esperado vs obtenido
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment / Entorno
+      placeholder: "Browser/navegador, OS, file type (.docx/.pdf)"

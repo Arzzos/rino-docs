@@ -1,0 +1,23 @@
+name: Feature request / Propuesta
+description: Suggest an improvement (Alpha scope). / Propón una mejora (alcance Alpha).
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Problema
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal / Propuesta
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope / Alcance
+      options: [Alpha polish / Pulido Alpha, Parser robustness / Parser robusto, Post-Alpha backend exploration / Backend exploratorio, Other / Otro]
+    validations:
+      required: true

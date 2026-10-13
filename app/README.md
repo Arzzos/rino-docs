@@ -1,40 +1,80 @@
 # Rino Docs — Portafolios y Evidencias TESCI (Offline-First)
 
 PWA 100% del lado del cliente para generar el **FO-205P11000-14** (réplica exacta en PDF),
-ensamblar **portafolios institucionales** y parsear **instrumentaciones FO-205P11000-44** (`.docx`/`.pdf`).
+ensamblar **portafolios institucionales** e incrustar **instrumentaciones FO-205P11000-44** íntegras.
 
 ## Arquitectura hexagonal
 
 ```
 src/
   domain/            Entidades puras + validación FO-205P11000-14 (sin frameworks)
-  application/       (casos de uso orquestados desde UI: perfil, parseo, export, ensamble)
-  infrastructure/    Adaptadores salida:
-    db.ts                IndexedDB (Dexie) + LocalStorage perfil
-    instrumentParser.ts  mammoth + JSZip + pdfjs, tolerante + fallback manual
-    imageOptimizer.ts    canvas: máx 1600px, JPEG 0.92 / PNG si hay alfa
-    fo14Pdf.ts           pdf-lib réplica exacta Letter, membretes originales
-    portfolioPdf.ts      portada + índice + instrumentación ORIGINAL + competencias + evidencias
-  ui (App.tsx)       Adaptadores entrada: 4 módulos React mobile-first
-  composition/       (wiring directo en componentes; sin singletons ocultos)
+  infrastructure/    Adaptadores de salida:
+    db.ts                IndexedDB (Dexie v2: materias, instrumentaciones,
+                         evidencias, portafolios, diagnósticas) + LocalStorage perfil
+    instrumentParser.ts  mammoth + JSZip + pdfjs, tolerante + editor manual
+    imageOptimizer.ts    canvas: máx 1600px, JPEG 0.92 / PNG con alfa
+    pdfTheme.ts          carta 612×792, header 3 logos + footer dirección en todo
+    codeHighlight.ts     highlight.js offline (python, java, c, sql) → UI + PDF
+    fo14Pdf.ts           réplica exacta: rejilla 9 cols del .docx, equipo (5),
+                         imágenes full-bleed ajustadas a carta, código con lenguaje
+    docxFullRender.ts    instrumentación .docx ÍNTEGRA a PDF (párrafos, tablas,
+                         imágenes, membretes propios, orientación original)
+    portfolioPdf.ts      portada réplica + índice cliqueable (paginación real,
+                         links + outline) + instrumentación + diagnóstica +
+                         portadas por competencia + evidencias
+  ui/                Adaptadores de entrada (React):
+    MateriasPanel      materias + instrumentación + diagnósticas + validador
+    EvidenciaEditor    wizard Datos → Contenido → Revisar, equipo manual,
+                       código con lenguaje, tablas editables, ajuste de imagen
+    PortafolioPanel    grupos fijos + orden interno drag&drop + vista previa
+    PreviewModal       vista previa PDF fullscreen (iframe local)
 ```
 
 ## Decisiones clave (riesgos cuidados)
 
-- **Réplica exacta FO-205P11000-14**: Letter 612×792pt, márgenes reales del `.docx`
-  (70.85/85.05pt), PNG de header/footer extraídos del original, tabla de 10 campos,
-  sin instructivo (como pide la plantilla). Primera imagen contenida (máx 200pt) para
-  no desalinear membretes; resto a flujo libre.
-- **Portafolio incrusta el original**: PDF → páginas copiadas tal cual (membretes y
-  orientación intactas). DOCX → adjunto embebido + sección renderizada en su
-  orientación original (landscape de Cálculo preservado).
-- **Imágenes pesadas**: se redimensionan a 1600px y recomprimen a JPEG 0.92
-  (PNG solo con transparencia). Sin pérdida perceptible, ~10× menos peso.
-- **Parser tolerante**: exige `Competencia No.:` con punto (no parte en
-  "Competencia no alcanzada"), indicadores A–F por bloque (acepta más/menos letras),
-  editor manual de validación siempre disponible. Validado con la instrumentación
-  real de Cálculo Diferencial 2026-2: 4 competencias, 13–16 temas, A–F, confianza 1.0.
-- **Offline**: `vite-plugin-pwa` (Workbox), precache total, todo en IndexedDB.
+- **Sin páginas gigantes**: toda imagen se ajusta a carta sin perder fidelidad
+  (escalado vectorial, bytes originales intactos) + sliders manuales de ancho
+  y ajuste vertical por imagen.
+- **Equipo manual por evidencia**: campo (5) con titular + N integrantes
+  agregados a mano (no todo es en equipo).
+- **Índice fijo pero dinámico**: grupos en orden institucional
+  (portada → índice → instrumentación → diagnóstica → contenido);
+  orden libre dentro de cada grupo. Números de página reales (dos pasadas),
+  entradas cliqueables (anotaciones Link) y outline del documento.
+- **Instrumentación íntegra**: PDF original copiado tal cual; DOCX renderizado
+  completo (tablas de metadatos, caracterización, imágenes, landscape) +
+  archivo original adjunto al PDF.
+- **Parser validado** con instrumentación real de Cálculo 2026-2:
+  4 competencias, 13–16 temas, A–F, confianza 1.0.
+- **Offline**: Workbox precache total, todo en IndexedDB.
+
+## Despliegue en Cloudflare Pages (dashboard + GitHub)
+
+1. Sube el repo a GitHub (los `.docx`/`.pdf` de referencia no viajan: están ignorados).
+2. En el dashboard: Workers y Pages → Crear → Pages → Conectar con Git → elige el repo.
+3. Configuración de compilación:
+   - **Directorio raíz:** `app`
+   - **Comando de compilación:** `pnpm build` (o `npm run build`)
+   - **Directorio de salida:** `dist`
+   - **Node:** 20+
+4. `app/public/_headers` ya define caché correcta (`sw.js` sin caché, assets inmutables).
+   No se necesita `_redirects`: la app es de una sola ruta con pestañas por estado.
+
+## Despliegue por CLI (Wrangler)
+
+```bash
+cd app
+pnpm build
+npx wrangler login          # solo la primera vez (abre el navegador)
+pnpm deploy                 # wrangler pages deploy dist --project-name rino-docs
+```
+
+`app/wrangler.jsonc` fija el nombre del proyecto (`rino-docs`) y la salida
+(`dist`). Para un nombre distinto, edita `name` en `wrangler.jsonc` y el flag
+`--project-name` del script `deploy` en `app/package.json`.
+
+Dominio final: `https://rinodocs.arzzos.com` (dominio personalizado de
+Cloudflare Pages; apunta el DNS con un CNAME hacia `rino-docs.pages.dev`).
 
 ## Uso
 
@@ -42,10 +82,19 @@ src/
 cd app
 pnpm install
 pnpm dev      # desarrollo
+pnpm test     # pruebas (vitest)
 pnpm build    # dist/ lista para hosting estático (HTTPS)
-pnpm preview  # verificar PWA: /, /sw.js, /manifest.webmanifest
+pnpm preview  # verificar PWA
+pnpm deploy   # publicar dist/ en Cloudflare Pages (requiere wrangler login)
 ```
 
-Flujo: **Perfil** (una vez) → **Materias** (subir instrumentación, validar) →
-**Evidencias** (selector competencia + checkboxes + bloques + PDF al celular) →
-**Portafolio** (drag & drop del orden + generar PDF).
+Flujo: **Perfil** → **Materias** (subir instrumentación, validar, diagnóstica
+opcional) → **Evidencias** (wizard 3 pasos + PDF) → **Portafolio**
+(ordenar por grupos + generar PDF cliqueable).
+
+Las pruebas con instrumentaciones reales se omiten si los archivos no están
+(son referencia local ignorada por git: `*.docx`/`*.pdf` en la raíz).
+
+## Licencia
+
+MIT — ver [LICENSE](../LICENSE).

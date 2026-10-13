@@ -1,0 +1,29 @@
+name: Parser variant / Variante de parser
+description: New instrumentation layout the parser misreads. / Nuevo formato de instrumentación que el parser lee mal.
+labels: [parser]
+body:
+  - type: input
+    id: subject
+    attributes:
+      label: Subject / Materia
+      placeholder: "Cálculo Diferencial 1011V"
+    validations:
+      required: true
+  - type: dropdown
+    id: format
+    attributes:
+      label: File format / Formato (DOCX preferred / preferido)
+      options: [DOCX, PDF]
+    validations:
+      required: true
+  - type: textarea
+    id: got
+    attributes:
+      label: What the parser extracted vs expected / Qué extrajo vs qué esperabas
+      description: "Do NOT attach .docx/.pdf files with personal data. Paste the relevant fragment as text. / No adjuntes archivos con datos personales. Pega el fragmento como texto."
+    validations:
+      required: true
+  - type: textarea
+    id: fragment
+    attributes:
+      label: Text fragment (competence header, topics, indicators) / Fragmento de texto
