@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { uid, type Competencia, type Diagnostica, type Instrumentacion } from '../domain/types'
+import { formatearIndicadores, parsearIndicadoresTexto, uid, type Competencia, type Diagnostica, type IndicadorAlcance, type Instrumentacion } from '../domain/types'
 import { db, type AsignaturaMeta } from '../infrastructure/db'
 import { optimizarImagen } from '../infrastructure/imageOptimizer'
 import { parsearInstrumentacion, base64ABytes } from '../infrastructure/instrumentParser'
@@ -285,7 +285,11 @@ function EditorInstrumentacion({ inst, cerrar }: { inst: Instrumentacion; cerrar
               <textarea value={c.temas.join('\n')} onChange={(e) => setComp(i, { ...c, temas: e.target.value.split('\n') })} rows={3} className="mt-0 w-full rounded-xl border t-line t-surface p-2 text-sm font-normal t-ink" placeholder="Un tema por línea" />
             </label>
             <label className="mt-2 grid gap-1 text-xs font-semibold t-muted">Indicadores (uno por línea)
-              <textarea value={c.indicadores.map((x) => `${x.letra}) ${x.descripcion} | ${x.valor ?? ''}`).join('\n')} onChange={(e) => setComp(i, { ...c, indicadores: e.target.value.split('\n').filter(Boolean).map((l) => { const m = l.match(/^\s*([A-Z])\)\s*(.*?)(?:\|\s*(\d+))?\s*$/); return { letra: m?.[1] ?? '?', descripcion: m?.[2] ?? l, valor: m?.[3] ? parseInt(m[3]) : null } }) })} rows={4} className="mt-0 w-full rounded-xl border t-line t-surface p-2 text-sm font-normal t-ink" placeholder="A) descripción | 15" />
+              <IndicadoresEditor
+                clave={`${draft.id}-comp-${i}`}
+                indicadores={c.indicadores}
+                onCommit={(inds) => setComp(i, { ...c, indicadores: inds })}
+              />
             </label>
           </div>
         ))}
@@ -296,5 +300,24 @@ function EditorInstrumentacion({ inst, cerrar }: { inst: Instrumentacion; cerrar
         </div>
       </div>
     </div>
+  )
+}
+
+/** Texto libre local: el padre recibe el parseo pero el valor mostrado
+ *  nunca se reformatea al teclear, así no salta el cursor ni reaparece "|". */
+function IndicadoresEditor({ clave, indicadores, onCommit }: { clave: string; indicadores: IndicadorAlcance[]; onCommit: (inds: IndicadorAlcance[]) => void }) {
+  const [texto, setTexto] = useState(() => formatearIndicadores(indicadores))
+  useEffect(() => {
+    setTexto(formatearIndicadores(indicadores))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clave])
+  return (
+    <textarea
+      value={texto}
+      onChange={(e) => { setTexto(e.target.value); onCommit(parsearIndicadoresTexto(e.target.value)) }}
+      rows={4}
+      className="mt-0 w-full rounded-xl border t-line t-surface p-2 text-sm font-normal t-ink"
+      placeholder="A) descripción | 15"
+    />
   )
 }

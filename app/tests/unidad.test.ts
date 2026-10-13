@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import JSZip from 'jszip'
-import { validarEvidencia, type Evidencia } from '../src/domain/types'
+import { validarEvidencia, formatearIndicadores, parsearIndicadoresTexto, type Evidencia } from '../src/domain/types'
 import { BORRADOR_MS, borradorConContenido, borradorExpirado, expiraEn, haceCuanto } from '../src/infrastructure/borradores'
 import { necesitaMigracionEvidencia, normalizarEvidencia, normalizarSeccion } from '../src/domain/migrate'
 import { grupoDe } from '../src/domain/types'
@@ -256,8 +256,28 @@ describe('metadatos desde tablas + indicadores completos', () => {
   })
 })
 
-describe('herencia materia → evidencia', () => {
-  const perfil = { nombreCompleto: 'Alu', numeroControl: 'E1', division: 'DivP', grupo: 'G0' }
+describe('editor de indicadores (sin foco perdido ni "|" fantasma)', () => {
+  it('no reinyecta "|" al borrarlo', () => {
+    const inds = parsearIndicadoresTexto('A) algo | 15')
+    expect(inds).toEqual([{ letra: 'A', descripcion: 'algo', valor: 15 }])
+    const borrado = parsearIndicadoresTexto('A) algo')
+    expect(borrado).toEqual([{ letra: 'A', descripcion: 'algo', valor: null }])
+    expect(formatearIndicadores(borrado)).toBe('A) algo')
+  })
+  it('tolera "|" sin número y líneas vacías eliminables', () => {
+    expect(parsearIndicadoresTexto('A) algo |')).toEqual([{ letra: 'A', descripcion: 'algo', valor: null }])
+    expect(parsearIndicadoresTexto('A) uno\n\nB) dos | 10\n')).toEqual([
+      { letra: 'A', descripcion: 'uno', valor: null },
+      { letra: 'B', descripcion: 'dos', valor: 10 },
+    ])
+  })
+  it('ida y vuelta estable', () => {
+    const texto = 'A) uno | 10\nB) dos'
+    expect(formatearIndicadores(parsearIndicadoresTexto(texto))).toBe(texto)
+  })
+})
+
+describe('herencia materia → evidencia', () => {  const perfil = { nombreCompleto: 'Alu', numeroControl: 'E1', division: 'DivP', grupo: 'G0' }
   const vacia = {
     id: '', asignaturaId: '', division: '', grupo: '', asignatura: '', docente: '',
     alumnoNombre: '', numeroControl: '', integrantes: [], fechaEntrega: 'hoy',
