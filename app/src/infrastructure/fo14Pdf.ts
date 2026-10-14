@@ -251,7 +251,7 @@ export function mapaDeIndicadores(
   return m
 }
 
-export function descargarPDF(bytes: Uint8Array, nombre: string) {  const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' })
+export function descargarPDF(bytes: Uint8Array, nombre: string) {  const blob = new Blob([bytes.slice()], { type: 'application/pdf' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -262,5 +262,5 @@ export function descargarPDF(bytes: Uint8Array, nombre: string) {  const blob = 
 }
 
 export function pdfAUrl(bytes: Uint8Array): string {
-  return URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' }))
+  return URL.createObjectURL(new Blob([bytes.slice()], { type: 'application/pdf' }))
 }
