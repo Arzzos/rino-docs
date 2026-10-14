@@ -10,6 +10,7 @@ Formato: Keep a Changelog + SemVer. Entradas bilingües (ES/EN) por release. / F
 
 ### Corregido / Fixed
 - Vista previa en móvil: visor propio con pdf.js en dispositivos táctiles (todas las páginas bajo demanda, sin depender del visor nativo que falla en PWA/móvil); en escritorio se conserva el visor nativo. / Mobile preview now uses a built-in pdf.js viewer on touch devices (all pages on demand); desktop keeps the native viewer.
+- Parser de instrumentación robusto (DOCX por tablas, PDF por columnas): temas sin encabezados ni columnas vecinas, indicadores multilínea completos sin `|` ni porcentaje (solo letra + descripción), descripciones sin cortes por palabras clave; verificado en 7 documentos. / Robust instrumentation parsing (table-driven DOCX, column-aware PDF): clean topics, complete multiline indicators without `|` or percentages, full descriptions; verified on 7 documents.
 - Editor de indicadores de alcance: ya no pierde el foco al teclear ni reaparece el `|` al borrarlo (edición en texto libre con parseo diferido). / Scope-indicator editor no longer loses focus while typing and deleted `|` no longer reappears.
 - Portafolio en pantallas angostas: las filas de secciones ya no desbordan lateralmente (título truncado + acciones en segunda línea), la navegación inferior permanece fija. / Portfolio on narrow screens no longer overflows horizontally; bottom navigation stays fixed.
 

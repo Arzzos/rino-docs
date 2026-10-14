@@ -304,7 +304,7 @@ function EditorInstrumentacion({ inst, cerrar }: { inst: Instrumentacion; cerrar
 }
 
 /** Texto libre local: el padre recibe el parseo pero el valor mostrado
- *  nunca se reformatea al teclear, así no salta el cursor ni reaparece "|". */
+ *  nunca se reformatea al teclear, así no salta el cursor. */
 function IndicadoresEditor({ clave, indicadores, onCommit }: { clave: string; indicadores: IndicadorAlcance[]; onCommit: (inds: IndicadorAlcance[]) => void }) {
   const [texto, setTexto] = useState(() => formatearIndicadores(indicadores))
   useEffect(() => {
@@ -317,7 +317,7 @@ function IndicadoresEditor({ clave, indicadores, onCommit }: { clave: string; in
       onChange={(e) => { setTexto(e.target.value); onCommit(parsearIndicadoresTexto(e.target.value)) }}
       rows={4}
       className="mt-0 w-full rounded-xl border t-line t-surface p-2 text-sm font-normal t-ink"
-      placeholder="A) descripción | 15"
+      placeholder="A) descripción"
     />
   )
 }

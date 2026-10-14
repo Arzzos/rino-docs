@@ -11,7 +11,7 @@ import { resaltarTokens, tokensPorLinea } from '../src/infrastructure/codeHighli
 import { encajar, sanearWinAnsi } from '../src/infrastructure/pdfTheme'
 import { extraerMembretesDocx } from '../src/infrastructure/docxFullRender'
 import { esContinuacionVMerge } from '../src/infrastructure/docxFullRender'
-import { extraerMeta, extraerMetaTablas, extraerNumeroCompetencia, extraerDescripcion, extraerTemas, extraerIndicadores, extraerEvidencias, textoPdfConLayout, normalizarTextoExtraido, construirInstrumentacion } from '../src/infrastructure/instrumentParser'
+import { extraerMeta, extraerMetaTablas, extraerNumeroCompetencia, extraerDescripcion, extraerTemas, extraerIndicadores, extraerEvidencias, textoPdfConLayout, normalizarTextoExtraido, construirInstrumentacion, filasDeDocx, filasDePdf, competenciasDeFilas, numeroFinal, trozarTemas } from '../src/infrastructure/instrumentParser'
 import { SECCIONES_LEGALES, TERMINOS_CLAVE, TERMINOS_VERSION, aceptacionVigente } from '../src/domain/legal'
 import { mapaDeIndicadores } from '../src/infrastructure/fo14Pdf'
 import { generarEvidenciaPDF } from '../src/infrastructure/fo14Pdf'
@@ -34,6 +34,9 @@ const DOCX_CALCULO = buscarRef('calculo', 'diferencial', 'docx')
 const DOCX_ETICA = buscarRef('etica', 'docx')
 const PDF_CALCULO = buscarRef('calculo', 'diferencial', 'pdf')
 const PDF_DISCRETAS = buscarRef('discretas', 'pdf')
+const PDF_CONTA = buscarRef('conta', 'pdf')
+const PDF_ADMIN = buscarRef('administracion', 'pdf')
+const PDF_FUND = buscarRef('fundamentos', 'pdf')
 const hayRef = (ruta: string | null): ruta is string => !!ruta && existsSync(ruta)
 
 const base: Evidencia = {
@@ -257,10 +260,10 @@ describe('metadatos desde tablas + indicadores completos', () => {
   })
 })
 
-describe('editor de indicadores (sin foco perdido ni "|" fantasma)', () => {
-  it('no reinyecta "|" al borrarlo', () => {
+describe('editor de indicadores (letra + descripción, sin porcentaje)', () => {
+  it('descarta el "| ..." residual de datos guardados antes', () => {
     const inds = parsearIndicadoresTexto('A) algo | 15')
-    expect(inds).toEqual([{ letra: 'A', descripcion: 'algo', valor: 15 }])
+    expect(inds).toEqual([{ letra: 'A', descripcion: 'algo', valor: null }])
     const borrado = parsearIndicadoresTexto('A) algo')
     expect(borrado).toEqual([{ letra: 'A', descripcion: 'algo', valor: null }])
     expect(formatearIndicadores(borrado)).toBe('A) algo')
@@ -269,11 +272,11 @@ describe('editor de indicadores (sin foco perdido ni "|" fantasma)', () => {
     expect(parsearIndicadoresTexto('A) algo |')).toEqual([{ letra: 'A', descripcion: 'algo', valor: null }])
     expect(parsearIndicadoresTexto('A) uno\n\nB) dos | 10\n')).toEqual([
       { letra: 'A', descripcion: 'uno', valor: null },
-      { letra: 'B', descripcion: 'dos', valor: 10 },
+      { letra: 'B', descripcion: 'dos', valor: null },
     ])
   })
   it('ida y vuelta estable', () => {
-    const texto = 'A) uno | 10\nB) dos'
+    const texto = 'A) uno\nB) dos'
     expect(formatearIndicadores(parsearIndicadoresTexto(texto))).toBe(texto)
   })
 })
@@ -582,8 +585,9 @@ describe('parseo PDF paridad con DOCX (FO-205P11000-44)', () => {
     const inds = extraerIndicadores(seg)
     expect(inds.map((i) => i.letra)).toContain('A')
     const d = inds.find((i) => i.letra === 'D')
-    expect(d?.valor).toBe(15)
-    expect(inds.find((i) => i.letra === 'A')?.valor).toBe(15)
+    expect(d?.valor).toBeNull()
+    expect(inds.find((i) => i.letra === 'A')?.valor).toBeNull()
+    expect(inds.find((i) => i.letra === 'A')?.descripcion).not.toMatch(/15|%/)
   })
 
   it('indicadores: fallback en línea con texto aplanado', () => {
@@ -596,8 +600,7 @@ describe('parseo PDF paridad con DOCX (FO-205P11000-44)', () => {
     const seg = 'Indicadores de alcance (26) Valor del indicador (27)\nA) Se adapta a situaciones y contextos complejos. 15%\nD) Introduce recursos y experiencias que promueven un pensamiento crítico; (por ejemplo,\n15%\nE) Incorpora conocimientos interdisciplinarios 20%\nDesempeño Nivel de desempeño'
     const inds = extraerIndicadores(seg)
     expect(inds.map((i) => i.letra)).toEqual(['A', 'D', 'E'])
-    expect(inds.find((i) => i.letra === 'A')).toMatchObject({ valor: 15 })
-    expect(inds.find((i) => i.letra === 'D')).toMatchObject({ valor: 15 })
+    expect(inds.every((i) => i.valor === null)).toBe(true)
     expect(inds.find((i) => i.letra === 'A')?.descripcion).not.toMatch(/%/)
   })
 
@@ -605,7 +608,7 @@ describe('parseo PDF paridad con DOCX (FO-205P11000-44)', () => {
     const seg = 'Indicadores de alcance (24) Valor del indicador (25)\nA) Se adapta a situaciones y contextos complejos. 15\nD) Introduce recursos y experiencias que promueven un pensamiento crítico; (por ejemplo, el uso de las tecnologías de la información estableciendo\npreviamente un criterio). Ante temas de una asignatura, introduce cuestionamientos de tipo ético\n15\nNiveles de desempeño (26)'
     const inds = extraerIndicadores(seg)
     const d = inds.find((i) => i.letra === 'D')
-    expect(d?.valor).toBe(15)
+    expect(d?.valor).toBeNull()
     expect(d?.descripcion.replace(/\s+/g, ' ')).toMatch(/previamente un criterio/)
     expect(d?.descripcion.replace(/\s+/g, ' ')).toMatch(/cuestionamientos de tipo ético/)
   })
@@ -614,7 +617,7 @@ describe('parseo PDF paridad con DOCX (FO-205P11000-44)', () => {
     const seg = 'Indicadores de alcance (24) Valor del indicador (25)\nSe adapta a situaciones y contextos complejos.\n25\nHace aportaciones a las actividades académicas desarrolladas.\n25\nF. Realiza su trabajo de manera autónoma y autoregulada\n10\nNiveles de desempeño (26)'
     const inds = extraerIndicadores(seg)
     expect(inds.map((i) => i.letra)).toEqual(['A', 'B', 'F'])
-    expect(inds.map((i) => i.valor)).toEqual([25, 25, 10])
+    expect(inds.map((i) => i.valor)).toEqual([null, null, null])
     expect(inds[2].descripcion).toMatch(/autónoma/)
     expect(inds[2].descripcion).not.toMatch(/^F\./)
   })
@@ -646,7 +649,7 @@ describe('parseo PDF paridad con DOCX (FO-205P11000-44)', () => {
     expect(meta.clave).toBe('ACF-2301')
     const partes = texto.split(/competencia\s*no\.\s*:?/i).slice(1)
     expect(partes.length).toBe(4)
-    // Verdad de referencia del .docx: 15/14/14/12 temas, A–F con valores.
+    // Verdad de referencia del .docx: 15/14/14/12 temas, A–F sin valores.
     const temasEsperados = [15, 14, 14, 12]
     const numeros = partes.map((s, i) => extraerNumeroCompetencia(s, String(i + 1)))
     expect(numeros).toEqual(['1', '2', '3', '4'])
@@ -658,7 +661,7 @@ describe('parseo PDF paridad con DOCX (FO-205P11000-44)', () => {
       expect(temas.join(' '), `comp ${i + 1} mezcla`).not.toMatch(/Investiga|Explicar|Guiar|Controla la conducta|Precisa la comunicación|Fomentar|Mostrar situaciones/)
       const inds = extraerIndicadores(seg)
       expect(inds.map((x) => x.letra), `comp ${i + 1} letras`).toEqual(['A', 'B', 'C', 'D', 'E', 'F'])
-      expect(inds.map((x) => x.valor), `comp ${i + 1} valores`).toEqual([15, 15, 15, 15, 20, 20])
+      expect(inds.every((x) => x.valor === null), `comp ${i + 1} sin porcentaje`).toBe(true)
       const evs = extraerEvidencias(seg)
       expect(evs.length, `comp ${i + 1} sin evidencias`).toBeGreaterThanOrEqual(1)
     })
@@ -692,7 +695,7 @@ describe('parseo PDF paridad con DOCX (FO-205P11000-44)', () => {
       expect(extraerTemas(seg).length, `comp ${numero} sin temas`).toBeGreaterThan(2)
       expect(inds.length, `comp ${numero} sin indicadores`).toBeGreaterThanOrEqual(3)
       expect(inds.map((i) => i.letra), `comp ${numero} letras`).toEqual(['A', 'B', 'C', 'D', 'E', 'F'])
-      expect(inds.every((i) => i.valor !== null), `comp ${numero} sin valores`).toBe(true)
+      expect(inds.every((i) => i.valor === null), `comp ${numero} sin porcentaje`).toBe(true)
       expect(evs.length, `comp ${numero} sin evidencias`).toBeGreaterThanOrEqual(1)
       expect(evs.join(' '), `comp ${numero} evidencia sucia`).not.toMatch(/%|Heteroevaluación|Total/)
     }
@@ -718,7 +721,7 @@ describe('parseo PDF paridad con DOCX (FO-205P11000-44)', () => {
     const { instrumentacion } = construirInstrumentacion({
       texto: raw, meta, nombre: 'etica.docx',
       mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      b64: '', orientacion: 'landscape',
+      b64: '', orientacion: 'landscape', filas: filasDeDocx(docXml),
     })
     // 4 competencias reales 1–4; las 8 tablas FO-14 incrustadas no generan basura.
     expect(instrumentacion.competencias.map((c) => c.numero)).toEqual(['1', '2', '3', '4'])
@@ -727,12 +730,192 @@ describe('parseo PDF paridad con DOCX (FO-205P11000-44)', () => {
       expect(c.descripcion.length, `comp ${i + 1} sin descripción`).toBeGreaterThan(20)
       expect(c.temas.length, `comp ${i + 1} sin temas`).toBeGreaterThan(2)
       expect(c.indicadores.map((x) => x.letra), `comp ${i + 1} letras`).toEqual(['A', 'B', 'C', 'D', 'E', 'F'])
-      expect(c.indicadores.every((x) => x.valor !== null), `comp ${i + 1} sin valores`).toBe(true)
+      expect(c.indicadores.every((x) => x.valor === null), `comp ${i + 1} sin porcentaje`).toBe(true)
       expect(c.evidenciasSugeridas.length, `comp ${i + 1} sin evidencias`).toBeGreaterThanOrEqual(1)
     })
     expect(instrumentacion.competencias[0].descripcion).toMatch(/ideologías/)
-    expect(instrumentacion.competencias[0].indicadores.map((x) => x.valor)).toEqual([25, 25, 20, 10, 10, 10])
+    expect(instrumentacion.competencias[0].temas.join(' ')).toMatch(/Generalidades sobre Ética/)
+    expect(instrumentacion.competencias[0].temas.join(' ')).not.toMatch(/Actividades de aprendizaje|Evaluar Asignar/)
   }, 60000)
+})
+
+describe('extracción estructural por filas (FO-205P11000-44)', () => {
+  it('numeroFinal: parentetizado final o dígitos iniciales', () => {
+    expect(numeroFinal('1 ,2 ,3 (1)', 'x')).toBe('1')
+    expect(numeroFinal('4/ 5 ( 2)', 'x')).toBe('2')
+    expect(numeroFinal('6/7 (3)', 'x')).toBe('3')
+    expect(numeroFinal('8/9 (4)', 'x')).toBe('4')
+    expect(numeroFinal('2.', 'x')).toBe('2')
+    expect(numeroFinal('1', 'x')).toBe('1')
+    expect(numeroFinal('', 'x')).toBe('x')
+  })
+
+  it('trozarTemas: no parte dentro de un número (`1.2.1` intacto)', () => {
+    const t = trozarTemas('1.2.1 Respeto y responsabilidad 1.2.2.1 Respeto a la vida')
+    expect(t.filter((x) => x.numerado).map((x) => x.texto)).toEqual([
+      '1.2.1 Respeto y responsabilidad',
+      '1.2.2.1 Respeto a la vida',
+    ])
+  })
+
+  it('trozarTemas: marca sin espacio y nota en mayúsculas', () => {
+    const t = trozarTemas('1.2Panorama general de la contabilidad:')
+    expect(t).toHaveLength(1)
+    expect(t[0].numerado).toBe(true)
+    const nota = trozarTemas('APLICACIÓN DE SEGUNDAS OPORTUNIDADES')
+    expect(nota).toHaveLength(1)
+    expect(nota[0].suelto).toBe(true)
+    expect(trozarTemas('16.67')).toEqual([])
+  })
+
+  it('filasDePdf: agrupa por renglón y une runs partidos', () => {
+    const filas = filasDePdf([[
+      { str: '1.1 Tema', transform: [8, 0, 0, 8, 77, 400], width: 40 },
+      { str: 'Actividad', transform: [8, 0, 0, 8, 220, 400], width: 50 },
+      { str: 'cont.', transform: [8, 0, 0, 8, 77, 389], width: 25 },
+    ]])
+    expect(filas).toHaveLength(2)
+    expect(filas[0].celdas).toEqual(['1.1 Tema', 'Actividad'])
+    expect(filas[1].celdas).toEqual(['cont.'])
+  })
+
+  it('competenciasDeFilas: encabezado DOCX, indicador multilínea y niveles fuera', () => {
+    const comps = competenciasDeFilas([
+      { celdas: ['Competencia No. :(17)', '1 ,2 ,3 (1)', 'Descripción(18):', 'Conoce los números reales'], xs: [], ws: [], ys: [] },
+      { celdas: ['Temas y subtemas para desarrollar la competencia', 'Actividades de aprendizaje'], xs: [], ws: [], ys: [] },
+      { celdas: ['1.1 Los números reales y sus subconjuntos.'], xs: [], ws: [], ys: [] },
+      { celdas: ['Indicadores de alcance (24)', 'Valor del indicador (25)'], xs: [], ws: [], ys: [] },
+      { celdas: ['A) Se adapta a situaciones complejas.', '15'], xs: [], ws: [], ys: [] },
+      { celdas: ['D) Introduce recursos con criterio', '15'], xs: [], ws: [], ys: [] },
+      { celdas: ['Desempeño', 'Nivel de desempeño', 'Indicadores de alcance (27)', 'Valoración numérica (28)'], xs: [], ws: [], ys: [] },
+      { celdas: ['Competencia no alcanzada', 'Insuficiente', 'No se cumple con el 100% de evidencias', 'NA'], xs: [], ws: [], ys: [] },
+    ])
+    expect(comps).toHaveLength(1)
+    expect(comps[0].numero).toBe('1')
+    expect(comps[0].temas).toEqual(['1.1 Los números reales y sus subconjuntos.'])
+    expect(comps[0].indicadores.map((i) => i.letra)).toEqual(['A', 'D'])
+    expect(comps[0].indicadores.every((i) => i.valor === null)).toBe(true)
+    expect(comps[0].indicadores.join(' ')).not.toMatch(/100%|NA/)
+  })
+
+  it('competenciasDeFilas: número de campo suelto y temas sin encabezado previo', () => {
+    const comps = competenciasDeFilas([
+      { celdas: ['Competencia No. :', '(19)', '2', 'Descripción'], xs: [], ws: [], ys: [] },
+      { celdas: ['Temas y subtemas para desarrollar la competencia'], xs: [], ws: [], ys: [] },
+      { celdas: ['El sentido de la materia. 2.1 Significado.'], xs: [], ws: [], ys: [] },
+      { celdas: ['Temas y subtemas para desarrollar la competencia'], xs: [], ws: [], ys: [] },
+      { celdas: ['Otro bloque. 3.1 Siguiente.'], xs: [], ws: [], ys: [] },
+    ])
+    expect(comps.map((c) => c.numero)).toEqual(['2', '3'])
+    expect(comps[1].temas.join(' ')).toMatch(/3\.1 Siguiente/)
+  })
+
+  it('competenciasDeFilas: tablas FO-14 al final no generan basura', () => {
+    const comps = competenciasDeFilas([
+      { celdas: ['Competencia No. :', '1', 'Descripción', 'Aprende ética'], xs: [], ws: [], ys: [] },
+      { celdas: ['Temas y subtemas para desarrollar la competencia'], xs: [], ws: [], ys: [] },
+      { celdas: ['1.1 Generalidades.'], xs: [], ws: [], ys: [] },
+      { celdas: ['División: (1)', 'Ingeniería', 'Grupo: (2)', '1011-V'], xs: [], ws: [], ys: [] },
+      { celdas: ['Nombre y número de control: (5)', 'Alguien 123'], xs: [], ws: [], ys: [] },
+      { celdas: ['Evidencia de aprendizaje: (10)', 'CUADRO SINÓPTICO'], xs: [], ws: [], ys: [] },
+    ])
+    expect(comps).toHaveLength(1)
+    expect(comps[0].evidenciasSugeridas.join(' ')).not.toMatch(/CUADRO|Alguien/)
+  })
+})
+
+describe('instrumentación estructural en los 7 documentos', () => {
+  async function filasPdfReal(path: string) {
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const buf = readFileSync(path)
+    const pdf = await getDocument({ data: new Uint8Array(buf) }).promise
+    const paginas = []
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p)
+      paginas.push((await page.getTextContent()).items)
+    }
+    return filasDePdf(paginas as never)
+  }
+
+  async function compsDocxReal(path: string) {
+    const zip = await JSZip.loadAsync(readFileSync(path))
+    return competenciasDeFilas(filasDeDocx(await zip.file('word/document.xml')!.async('string')))
+  }
+
+  function revisarLimpieza(comps: { numero: string; descripcion: string; temas: string[]; indicadores: { letra: string; descripcion: string; valor: number | null }[]; evidenciasSugeridas: string[] }[], tag: string) {
+    for (const c of comps) {
+      expect(c.descripcion.length, `${tag} comp ${c.numero} sin descripción`).toBeGreaterThan(20)
+      expect(c.indicadores.map((i) => i.letra), `${tag} comp ${c.numero} letras`).toEqual(['A', 'B', 'C', 'D', 'E', 'F'])
+      expect(c.indicadores.every((i) => i.valor === null), `${tag} comp ${c.numero} con porcentaje`).toBe(true)
+      expect(c.indicadores.join(' '), `${tag} comp ${c.numero} indicador sucio`).not.toMatch(/%|\||NA \(No Alcanzada\)|Niveles de desempeño/)
+      for (const t of c.temas) {
+        expect(t, `${tag} comp ${c.numero} tema con %`).not.toMatch(/%/)
+      }
+      expect(c.evidenciasSugeridas.join(' '), `${tag} comp ${c.numero} evidencia sucia`).not.toMatch(/%|Heteroevaluación|Total \d|No Alcanzada/)
+    }
+  }
+
+  it.runIf(hayRef(DOCX_CALCULO))('DOCX Cálculo: 1–4 con 15/14/14/12 temas numerados', async () => {
+    const comps = await compsDocxReal(DOCX_CALCULO as string)
+    expect(comps.map((c) => c.numero)).toEqual(['1', '2', '3', '4'])
+    const numerados = comps.map((c) => c.temas.filter((t) => /^\d/.test(t)).length)
+    expect(numerados).toEqual([15, 14, 14, 12])
+    expect(comps[0].descripcion).toMatch(/decodificación/)
+    expect(comps[0].descripcion).toMatch(/TIC/)
+    expect(comps[0].temas.join(' ')).not.toMatch(/Actividades de aprendizaje|Explicar y ejemplificar/)
+    revisarLimpieza(comps, 'docx-calculo')
+  }, 60000)
+
+  it.runIf(hayRef(DOCX_CALCULO) && hayRef(PDF_CALCULO))('paridad estructural PDF vs DOCX en Cálculo', async () => {
+    const a = await compsDocxReal(DOCX_CALCULO as string)
+    const b = competenciasDeFilas(await filasPdfReal(PDF_CALCULO as string))
+    expect(b.map((c) => c.numero)).toEqual(a.map((c) => c.numero))
+    expect(b.map((c) => c.temas.filter((t) => /^\d/.test(t)).length))
+      .toEqual(a.map((c) => c.temas.filter((t) => /^\d/.test(t)).length))
+    expect(b.map((c) => c.indicadores.map((i) => i.letra))).toEqual(a.map((c) => c.indicadores.map((i) => i.letra)))
+    const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
+    expect(norm(b[0].descripcion)).toBe(norm(a[0].descripcion))
+  }, 120000)
+
+  it.runIf(hayRef(PDF_DISCRETAS))('PDF Discretas: 1–4 completos y limpios', async () => {
+    const comps = competenciasDeFilas(await filasPdfReal(PDF_DISCRETAS as string))
+    expect(comps.map((c) => c.numero)).toEqual(['1', '2', '3', '4'])
+    expect(comps[0].descripcion.replace(/\s+/g, ' ')).toBe('Reconoce la importancia de los sistemas numéricos: binario, octal y hexadecimal en las ciencias computacionales.')
+    expect(comps.map((c) => c.temas.filter((t) => /^\d/.test(t)).length)).toEqual([4, 7, 4, 6])
+    expect(comps.map((c) => c.evidenciasSugeridas.length)).toEqual([3, 3, 3, 4])
+    expect(comps[0].evidenciasSugeridas.join(' ')).toMatch(/lenguaje oculto/)
+    expect(comps.map((c) => c.temas.join(' ')).join(' ')).not.toMatch(/Realiza su Evaluación|Presentación de encuadre|Habilidad de aplicar|Responsabilidad social/)
+    revisarLimpieza(comps, 'pdf-discretas')
+  }, 120000)
+
+  it.runIf(hayRef(PDF_CONTA))('PDF Conta: 1–4 completos y limpios', async () => {
+    const comps = competenciasDeFilas(await filasPdfReal(PDF_CONTA as string))
+    expect(comps.map((c) => c.numero)).toEqual(['1', '2', '3', '4'])
+    expect(comps[0].temas.filter((t) => t === '1.1.1. Concepto de entidades,')).toHaveLength(1)
+    expect(comps[0].evidenciasSugeridas).toContain('Actividad 1. Cuadro Comparativo')
+    expect(comps.map((c) => c.temas.join(' ')).join(' ')).not.toMatch(/Actividad \d|Investiga el concepto|Realiza una exposición|Practica en equipo|Examen de conocimientos/)
+    revisarLimpieza(comps, 'pdf-conta')
+  }, 120000)
+
+  it.runIf(hayRef(PDF_ADMIN))('PDF Administración: 1–5 completos y limpios', async () => {
+    const comps = competenciasDeFilas(await filasPdfReal(PDF_ADMIN as string))
+    expect(comps.map((c) => c.numero)).toEqual(['1', '2', '3', '4', '5'])
+    expect(comps[0].temas.join(' ')).toMatch(/1\.1 Definición de administración/)
+    expect(comps.map((c) => c.temas.join(' ')).join(' ')).not.toMatch(/Test Final|%/)
+    revisarLimpieza(comps, 'pdf-admin')
+  }, 120000)
+
+  it.runIf(hayRef(PDF_FUND))('PDF Fundamentos: 1–5 completos y limpios', async () => {
+    const comps = competenciasDeFilas(await filasPdfReal(PDF_FUND as string))
+    expect(comps.map((c) => c.numero)).toEqual(['1', '2', '3', '4', '5'])
+    expect(comps[0].descripcion.replace(/\s+/g, ' ')).toMatch(/^Comprende los conceptos/)
+    expect(comps.every((c) => c.descripcion.length > 20)).toBe(true)
+    expect(comps[0].evidenciasSugeridas).toContain('Exposición en clase')
+    expect(comps[0].evidenciasSugeridas).toContain('Portafolio de evidencias')
+    expect(comps.map((c) => c.temas.join(' ')).join(' ')).not.toMatch(/Realiza la evaluación|muestra el SGI|Habilidades de gestión/)
+    expect(comps.map((c) => c.evidenciasSugeridas.join(' ')).join(' ')).not.toMatch(/A B C|%|Total/)
+    revisarLimpieza(comps, 'pdf-fund')
+  }, 120000)
 })
 
 describe('visor pdf adaptativo', () => {

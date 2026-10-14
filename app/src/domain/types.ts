@@ -17,18 +17,16 @@ export interface Integrante {
 export interface IndicadorAlcance {
   letra: string // A..Z (normalmente A-F, tolerar más/menos)
   descripcion: string
-  valor: number | null
+  valor: number | null // Legado: el parser y el editor ya no lo usan (siempre null)
 }
 
-/** Texto de una línea por indicador. Sin valor no se agrega "|". */
+/** Texto de una línea por indicador: solo letra y descripción. */
 export function formatearIndicadores(inds: IndicadorAlcance[]): string {
-  return inds
-    .map((x) => (x.valor == null ? `${x.letra}) ${x.descripcion}` : `${x.letra}) ${x.descripcion} | ${x.valor}`))
-    .join('\n')
+  return inds.map((x) => `${x.letra}) ${x.descripcion}`).join('\n')
 }
 
 /** Convierte el texto libre del editor a indicadores. Tolera letra
- *  opcional y "|" sin número para poder borrarlo sin que reaparezca. */
+ *  opcional y un "| ..." residual de datos guardados antes (se descarta). */
 export function parsearIndicadoresTexto(texto: string): IndicadorAlcance[] {
   return texto
     .split('\n')
@@ -37,16 +35,8 @@ export function parsearIndicadoresTexto(texto: string): IndicadorAlcance[] {
     .map((l) => {
       const m = l.match(/^\s*([A-Za-z])\)\s*(.*)$/)
       const letra = (m?.[1] ?? '?').toUpperCase()
-      let resto = (m?.[2] ?? l).trim()
-      let valor: number | null = null
-      const mv = resto.match(/^(.*)\|\s*(\d+)\s*$/)
-      if (mv) {
-        resto = mv[1].trim()
-        valor = parseInt(mv[2], 10)
-      } else {
-        resto = resto.replace(/\|\s*$/, '').trim()
-      }
-      return { letra, descripcion: resto, valor }
+      const resto = (m?.[2] ?? l).replace(/\|\s*\d*\s*$/, '').trim()
+      return { letra, descripcion: resto, valor: null as number | null }
     })
     .filter((x) => x.descripcion !== '')
 }

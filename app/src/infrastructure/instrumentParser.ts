@@ -52,7 +52,7 @@ async function parsearDocx(buf: Uint8Array, b64: string, file: File, prog?: (m: 
   const { instrumentacion } = construirInstrumentacion({
     texto: rawText, meta, nombre: file.name,
     mime: file.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    b64, orientacion,
+    b64, orientacion, filas: filasDeDocx(docXml),
   })
   return { instrumentacion }
 }
@@ -68,12 +68,14 @@ async function parsearPdf(buf: Uint8Array, b64: string, file: File, onProgreso?:
   let texto = ''
   let landscape = 0
   const total = Math.min(pdf.numPages, 60)
+  const paginas: ItemPdfEstruct[][] = []
   for (let p = 1; p <= total; p++) {
     onProgreso?.(`Leyendo PDF… página ${p}/${pdf.numPages}`)
     const page = await pdf.getPage(p)
     const vp = page.getViewport({ scale: 1 })
     if (vp.width > vp.height) landscape++
     const tc = await page.getTextContent()
+    paginas.push(tc.items as ItemPdfEstruct[])
     // Conserva los saltos de línea del PDF (hasEOL).
     texto += textoPdfConLayout(tc.items as { str?: string; hasEOL?: boolean }[]) + '\n'
   }
@@ -82,6 +84,7 @@ async function parsearPdf(buf: Uint8Array, b64: string, file: File, onProgreso?:
   const meta = extraerMeta(texto)
   const { instrumentacion } = construirInstrumentacion({
     texto, meta, nombre: file.name, mime: 'application/pdf', b64, orientacion,
+    filas: filasDePdf(paginas),
   })
   return { instrumentacion }
 }
@@ -94,9 +97,15 @@ export function construirInstrumentacion(args: {
   mime: string
   b64: string
   orientacion: 'portrait' | 'landscape'
+  filas?: FilaEstruct[]
 }): ParseResult {
   const { texto, meta, nombre, mime, b64, orientacion } = args
-  const competencias = extraerCompetencias(texto, '', '')
+  let competencias = extraerCompetencias(texto, '', '')
+  // La vía estructural por tablas manda cuando produce competencias.
+  if (args.filas) {
+    const estruct = competenciasDeFilas(args.filas)
+    if (estruct.length > 0) competencias = estruct
+  }
   const confianza = calcularConfianza(meta, competencias, texto)
   const instrumentacion: Instrumentacion = {
     id: uid(),
@@ -169,7 +178,7 @@ export function textoPdfConLayout(items: { str?: string; hasEOL?: boolean; trans
 
 /** Normaliza texto extraído (PDF o DOCX): guiones unicode, espacios, saltos. */
 export function normalizarTextoExtraido(t: string): string {
-  return t
+  return sinInvisibles(t)
     .replace(/\r\n?/g, '\n')
     .replace(/[–—−]/g, '-')
     .replace(/[ \t\u00a0]+\n/g, '\n')
@@ -207,6 +216,11 @@ const normalizarCampo = (campo: string, valor: string): string => {
 
 /** Une los runs de una celda respetando solo los espacios del texto. */
 function unirTextosCelda(cellXml: string): string {
+  return textoParrafos(cellXml).join(' ')
+}
+
+/** Párrafos de una celda: cada uno une sus runs sin espacios fantasma. */
+function textoParrafos(cellXml: string): string[] {
   const paras: string[] = []
   for (const pm of cellXml.matchAll(/<w:p[\s>][\s\S]*?<\/w:p>/g)) {
     let out = ''
@@ -226,9 +240,10 @@ function unirTextosCelda(cellXml: string): string {
       const tx = mm[1]
       if (tx) out += tx
     }
-    return out.replace(/\s+/g, ' ').trim()
+    const plano = out.replace(/\s+/g, ' ').trim()
+    if (plano) paras.push(plano)
   }
-  return paras.join(' ')
+  return paras
 }
 
 /** Metadatos desde las tablas del .docx (celda etiqueta → celda vecina). */
@@ -448,19 +463,25 @@ export function extraerIndicadores(texto: string): IndicadorAlcance[] {
     if (!letra || usadas.has(letra)) letra = libre()
     if (!letra) return
     usadas.add(letra)
-    inds.push({ letra, descripcion: desc, valor: cur.valor !== null && cur.valor <= 100 ? cur.valor : null })
+    // El porcentaje de la matriz no se guarda: solo letra y descripción.
+    inds.push({ letra, descripcion: desc, valor: null })
   }
   // Por líneas, acumulando continuaciones.
   let cur: { letra: string | null; desc: string; valor: number | null } | null = null
   const lineas = bloque.split('\n').map((l) => l.trimEnd())
   for (const cruda of lineas) {
     const l = cruda.trim()
-    if (!l || esCabeceraIndicador(l)) continue
+    if (!l) continue
+    if (esCabeceraIndicador(l)) {
+      if (cur) {
+        volcar(cur)
+        cur = null
+      }
+      continue
+    }
     const mv = l.match(/^(\d{1,3})\s*%?$/) // renglón solo con el valor
     if (mv) {
-      const v = parseInt(mv[1], 10)
-      if (cur && cur.valor === null && v <= 100) {
-        cur.valor = v
+      if (cur) {
         volcar(cur)
         cur = null
       }
@@ -469,11 +490,8 @@ export function extraerIndicadores(texto: string): IndicadorAlcance[] {
     const ml = l.match(/^\s*([A-Z])[.)]\s*(.+?)(?:\s+(\d{1,3})\s*%?)?\s*$/)
     if (ml) {
       if (cur) volcar(cur)
-      cur = { letra: ml[1], desc: limpiar(ml[2].replace(/\s*\d{1,3}\s*%$/, '')), valor: ml[3] ? parseInt(ml[3], 10) : null }
-      if (cur.valor !== null) {
-        volcar(cur)
-        cur = null
-      }
+      // Sin auto-cierre: las líneas siguientes pueden continuar la descripción.
+      cur = { letra: ml[1], desc: limpiar(ml[2].replace(/\s*\d{1,3}\s*%$/, '')), valor: null }
       continue
     }
     // Descripción o continuación (en estricto solo si hay indicador abierto).
@@ -491,8 +509,7 @@ export function extraerIndicadores(texto: string): IndicadorAlcance[] {
       if (inds.some((x) => x.letra === letra)) continue
       const desc = limpiar(m[2].replace(/\s*\d{1,3}\s*%?$/, ''))
       if (desc.length < 5 || /^(valor|competencia|desempe|nivel)/i.test(desc)) continue
-      const valor = parseInt(m[3], 10)
-      inds.push({ letra, descripcion: desc.slice(0, 300), valor: valor <= 100 ? valor : null })
+      inds.push({ letra, descripcion: desc.slice(0, 300), valor: null })
       if (inds.length >= 12) break
     }
   }
@@ -537,7 +554,7 @@ export function extraerEvidencias(seg: string): string[] {
   return acum.slice(0, 10)
 }
 
-function limpiarEvidencia(s: string): string {
+function limpiarEvidencia(s: string, minLen = 12): string {
   const t = s
     .replace(/\d+\s*%\s*/g, ' ')
     .replace(/\bX\b/gi, ' ')
@@ -546,10 +563,401 @@ function limpiarEvidencia(s: string): string {
     .replace(/^[:\-–—\s]+/, '')
     .replace(/(?:\s+\d{1,3})+\s*$/, '') // valores de indicador residuales (`…computadora 15 15`)
     .trim()
-  if (t.length < 12 || t.length > 280) return ''
+  if (t.length < minLen || t.length > 280) return ''
   if (/^(\d+%|hetero|auto|coev|total)/i.test(t)) return ''
   if (/^(A|B|C|D|E|F)$/i.test(t)) return ''
   return t
+}
+
+// ---- Extracción estructural por filas (tablas DOCX / renglones PDF) ----
+// Cada fila se clasifica por su contenido (competencia, temas, indicadores,
+// matriz, niveles) y solo la primera columna aporta temas e indicadores.
+// Los encabezados de tabla, las columnas vecinas y la matriz de niveles
+// nunca entran a los datos; el porcentaje se descarta (valor null).
+
+export interface FilaEstruct {
+  celdas: string[]
+  xs: number[]
+  ws: number[]
+  ys: number[]
+}
+
+export interface ItemPdfEstruct {
+  str?: string
+  transform?: number[]
+  width?: number
+}
+
+/** Filas en orden del documento a partir de las tablas del .docx. */
+export function filasDeDocx(docXml: string): FilaEstruct[] {
+  const filas: FilaEstruct[] = []
+  const body = docXml.match(/<w:body[\s>][\s\S]*<\/w:body>/)?.[0] ?? docXml
+  for (const tm of body.matchAll(/<w:tbl[\s>][\s\S]*?<\/w:tbl>/g)) {
+    for (const rm of tm[0].matchAll(/<w:tr[\s>][\s\S]*?<\/w:tr>/g)) {
+      const celdas = [...rm[0].matchAll(/<w:tc[\s>][\s\S]*?<\/w:tc>/g)].map((cm) =>
+        textoParrafos(cm[0]).join('\n'),
+      )
+      filas.push({ celdas, xs: [], ws: [], ys: [] })
+    }
+  }
+  return filas
+}
+
+const TOL_FILA_PDF = 2.5
+const UMBRAL_COLUMNA_PDF = 12
+const UMBRAL_ANCHO_COL1 = 60
+const TOL_MISMA_LINEA = 0.75
+
+/** Filas en orden a partir de los fragmentos de pdf.js (agrupados por y). */
+export function filasDePdf(paginas: ItemPdfEstruct[][]): FilaEstruct[] {
+  const filas: FilaEstruct[] = []
+  for (const items of paginas) {
+    const segs = items
+      .filter((it) => (it.str ?? '') !== '')
+      .map((it) => ({
+        x: it.transform?.[4] ?? 0,
+        y: it.transform?.[5] ?? 0,
+        w: it.width ?? 0,
+        texto: (it.str ?? '').replace(/\s+/g, ' ').trim(),
+      }))
+      .filter((s) => s.texto !== '')
+    segs.sort((a, b) => b.y - a.y || a.x - b.x)
+    let actual: typeof segs = []
+    let yRef = Infinity
+    const vaciar = () => {
+      if (actual.length === 0) return
+      actual.sort((a, b) => a.x - b.x)
+      const celdas: string[] = []
+      const xs: number[] = []
+      const ws: number[] = []
+      const ys: number[] = []
+      for (const s of actual) {
+        const prevX = xs[xs.length - 1] ?? Infinity
+        const prevW = ws[ws.length - 1] ?? 0
+        if (celdas.length > 0 && s.x - (prevX + prevW) < UMBRAL_COLUMNA_PDF) {
+          const prev = celdas[celdas.length - 1]
+          celdas[celdas.length - 1] = /[\s\-–—]$/.test(prev) ? prev + s.texto : prev + ' ' + s.texto
+          ws[ws.length - 1] = s.x + s.w - prevX
+          continue
+        }
+        celdas.push(s.texto)
+        xs.push(s.x)
+        ws.push(s.w)
+        ys.push(s.y)
+      }
+      filas.push({ celdas, xs, ws, ys })
+      actual = []
+    }
+    for (const s of segs) {
+      if (Math.abs(s.y - yRef) > TOL_FILA_PDF) {
+        vaciar()
+        yRef = s.y
+      }
+      actual.push(s)
+    }
+    vaciar()
+  }
+  return filas
+}
+
+/** Número de competencia: parentetizado final o dígitos iniciales. */
+export function numeroFinal(txt: string, fallback: string): string {
+  const t = sinInvisibles(txt).replace(/\s+/g, ' ').trim()
+  const par = t.match(/\(\s*(\d+)\s*\)\s*$/)
+  if (par) return par[1]
+  const ini = t.match(/^\D{0,8}(\d+)/)
+  if (ini) return ini[1]
+  return fallback
+}
+
+export interface TrozoTema {
+  texto: string
+  numerado: boolean
+  suelto: boolean
+}
+
+/** Divide una celda de temas en piezas (respeta párrafos y marcas N.M). */
+export function trozarTemas(celda: string): TrozoTema[] {
+  const out: TrozoTema[] = []
+  for (const p of celda.split('\n')) {
+    // Sin partir dentro de un número (`1.2.1` no se rompe en `2.1`).
+    for (const c of p.split(/(?<![\d.])(?=\d+\.(?:\d+\.?)*)/)) {
+      const texto = limpiar(c)
+      if (texto.length < 2) continue
+      if (/^[\d.\s%–—-]+$/.test(texto)) continue // resto numérico, no es tema
+      // Sin exigir frontera (`1.2Panorama` también es marca válida).
+      const numerado = /^\d+\.(?:\d+\.?)*(?![\d.])/.test(texto)
+      if (numerado && !/[A-Za-zÁÉÍÓÚáéíóúñ]/.test(texto)) continue // número sin título
+      // Nota en mayúsculas (renglón administrativo): pieza propia, no se pega.
+      const letras = texto.replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñ]/g, '')
+      const suelto = !numerado && letras.length > 3 && !/[a-záéíóúñ]/.test(texto)
+      out.push({ texto, numerado, suelto })
+    }
+  }
+  return out
+}
+
+interface IndAcum {
+  letra: string | null
+  desc: string
+}
+
+/** Competencias a partir de filas clasificadas por estructura. */
+export function competenciasDeFilas(filas: FilaEstruct[]): Competencia[] {
+  const comps: Competencia[] = []
+  let numero = ''
+  let descripcion = ''
+  let temas: string[] = []
+  let inds: IndAcum[] = []
+  let evs: string[] = []
+  let maxNum = 0
+  let modo: 'nada' | 'temas' | 'inds' | 'matriz' | 'ignorar' = 'nada'
+  let col1x = 0
+  let indAbierto: IndAcum | null = null
+  let matBuf = ''
+  const tomarNumero = (n: string, alternativa: string) => {
+    numero = numeroFinal(n, alternativa)
+    const v = parseInt(numero, 10)
+    if (!isNaN(v) && v > maxNum) maxNum = v
+  }
+  const volcarComp = () => {
+    if (numero !== '' && (descripcion !== '' || temas.length > 0 || inds.length > 0)) {
+      const letras = new Set<string>()
+      const finales: IndicadorAlcance[] = []
+      for (const ind of inds) {
+        const d = ind.desc.replace(/\s+/g, ' ').trim()
+        if (d.length < 5 || /^(valor|competencia|desempe|nivel)/i.test(d)) continue
+        let letra = ind.letra
+        if (!letra || letras.has(letra)) {
+          letra = null
+          for (let c = 65; c <= 90; c++) {
+            if (!letras.has(String.fromCharCode(c))) {
+              letra = String.fromCharCode(c)
+              break
+            }
+          }
+        }
+        if (!letra) continue
+        letras.add(letra)
+        finales.push({ letra, descripcion: d.slice(0, 300), valor: null })
+      }
+      finales.sort((a, b) => a.letra.localeCompare(b.letra))
+      comps.push({
+        numero,
+        descripcion: descripcion.replace(/\s+/g, ' ').trim().slice(0, 1200),
+        temas: temas.slice(0, 40),
+        indicadores: finales,
+        evidenciasSugeridas: evs.slice(0, 10),
+      })
+    }
+    numero = ''
+    descripcion = ''
+    temas = []
+    inds = []
+    evs = []
+    indAbierto = null
+    matBuf = ''
+    modo = 'nada'
+  }
+  for (let fi = 0; fi < filas.length; fi++) {
+    const f = filas[fi]
+    const celdas = f.celdas.map((c) => sinInvisibles(c))
+    const t = celdas.join(' ').replace(/\s+/g, ' ').trim()
+    if (!t) continue
+    // Para clasificar se mira la primera columna: las vecinas traen
+    // textos (`fuentes de información`, `firma ...`) que disparan reglas.
+    const tc = f.xs.length > 0 && col1x > 0
+      ? celdas.filter((_, i) => (f.xs[i] ?? 0) < col1x + UMBRAL_ANCHO_COL1).join(' ').replace(/\s+/g, ' ').trim()
+      : t
+    // Tablas FO-14 de ejemplo al final del documento: ahí termina la instrumentación.
+    if (/nombre y n[uú]mero de control|fecha de entrega/i.test(tc)) break
+    if (/competencia\s*no\./i.test(tc)) {
+      const iNo = celdas.findIndex((c) => /competencia\s*no\./i.test(c))
+      // El número puede ir en la celda siguiente o dos después (`No. : | (19) | 1`).
+      const esNumCampo = (s: string) =>
+        /^[^0-9a-zA-Záéíóúñ]*[\(☹\[]\s*\d+\s*[\)\]]?[^0-9a-zA-Záéíóúñ]*$/.test(s)
+      let cands: string[]
+      if (iNo >= 0) {
+        const misma = celdas[iNo].replace(/[\s\S]*?competencia\s*no\.\s*:?\s*/i, '').trim()
+        cands = [misma, celdas[iNo + 1] ?? '', celdas[iNo + 2] ?? '']
+          .map((s) => s.trim())
+          .filter(Boolean)
+      } else {
+        const resto = t.replace(/[\s\S]*?competencia\s*no\.\s*:?\s*/i, '')
+        cands = [...resto.matchAll(/\(?\s*\d+[\d\s/,.]*\)?\.?/g)].map((m) => m[0].trim())
+      }
+      const numTxt = cands.find((c) => !esNumCampo(c)) ?? cands[0] ?? ''
+      const iDesc = celdas.findIndex((c) => /descripci/i.test(c))
+      let desc = ''
+      if (iDesc >= 0) {
+        const misma = celdas[iDesc].replace(/[\s\S]*?descripci[oó]n\s*\(?[^)]*\)?\s*:?\s*/i, '').trim()
+        desc = [misma, ...celdas.slice(iDesc + 1)].join(' ').replace(/\s+/g, ' ').trim()
+        // Etiqueta y número en celdas previas (`Descripción | (20): | ...`).
+        desc = desc.replace(/^\s*\([^)]{0,8}\)\s*:?\s*/, '')
+      }
+      volcarComp()
+      tomarNumero(numTxt, String(maxNum + 1))
+      descripcion = limpiar(desc)
+      if (!descripcion) {
+        // Inicio partido por el salto de página: hasta 2 renglones previos.
+        const previas: string[] = []
+        for (let k = fi - 1; k >= 0 && previas.length < 2; k--) {
+          const g = filas[k]
+          const gt = g.celdas.join(' ').replace(/\s+/g, ' ').trim()
+          if (!gt || g.celdas.length !== 1) break
+          if (gt.length < 20 || gt.length >= 300 || /^\d+$/.test(gt)) break
+          if (/^(asignatura|docente)\s*:/i.test(gt)) break
+          if (/competencia\s*no\.|temas y subtemas|indicadores de alcance|niveles?\s+de\s+desempe|evidencias?\s+de\s+aprendizaje|matriz de evaluaci|nombre y número de control|fecha de entrega|calendarizaci|fuentes de informaci|semana fecha|firma del|jefatura de divisi|análisis por competencias|atributo|intención/i.test(gt)) break
+          previas.unshift(gt)
+        }
+        if (previas.length > 0) descripcion = limpiar(previas.join(' '))
+      }
+      continue
+    }
+    if (/nivel(es)?\s+de\s+desempe/i.test(tc)) {
+      modo = 'ignorar'
+      continue
+    }
+    if (/evidencias?\s+de\s+aprendizaje|matriz de evaluaci/i.test(tc)) {
+      modo = 'matriz'
+      matBuf = ''
+      continue
+    }
+    if (/temas y subtemas/i.test(tc)) {
+      // Encabezado sin fila de competencia previa: arranca la siguiente.
+      if (numero === '' || temas.length > 0) {
+        volcarComp()
+        tomarNumero('', String(maxNum + 1))
+      }
+      modo = 'temas'
+      col1x = f.xs.length > 0 ? Math.min(...f.xs) : 0
+      continue
+    }
+    if (/indicadores de alcance/i.test(tc)) {
+      modo = 'inds'
+      indAbierto = null
+      continue
+    }
+    if (/calendarizaci|fuentes de informaci|semana fecha|firma del|jefatura de divisi/i.test(tc)) {
+      modo = 'ignorar'
+      continue
+    }
+    if (/análisis por competencias/i.test(tc)) {
+      continue
+    }
+    // Descripción que envuelve renglones de ancho completo tras el encabezado.
+    if (modo === 'nada' && numero !== '' && celdas.length === 1 &&
+      t.length >= 4 && t.length < 300 && !/^\d+$/.test(t) &&
+      !/^(asignatura|docente)\s*:/i.test(t)) {
+      descripcion = descripcion ? `${descripcion} ${t}`.replace(/\s+/g, ' ').trim() : t
+      continue
+    }
+    if (modo === 'temas' && numero !== '') {
+      // Primera columna por posición: el contenido de la 2.ª arranca
+      // más de 100 unidades a la derecha del inicio de la 1.ª.
+      let izq: string
+      if (f.xs.length > 0 && col1x > 0) {
+        // Misma línea que la celda izquierda y dentro del ancho de la columna.
+        const y0 = f.ys[0] ?? 0
+        izq = celdas
+          .filter((c, i) => (f.xs[i] ?? 0) < col1x + UMBRAL_ANCHO_COL1 &&
+            Math.abs((f.ys[i] ?? y0) - y0) <= TOL_MISMA_LINEA &&
+            !/^\s*actividad\s*\d+/i.test(c))
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+      } else {
+        izq = (celdas[0] ?? '').replace(/\s+/g, ' ').trim()
+      }
+      // Restos del encabezado pegados al primer tema (`...competencia X.Y ...`).
+      izq = izq.replace(/^(para desarrollar la( competencia)?|específica\s*\(\d+\)|temas y subtemas[^.]*?)\s*/i, '')
+      if (!izq || /^(asignatura|docente)\s*:/i.test(izq) ||
+        /temas y subtemas|competencia espec|desarrollar la comp|^espec[ií]fica/i.test(izq) ||
+        /^\d+\s*h(oras)?\b/i.test(izq) || /^hp\s*=/i.test(izq)) continue
+      for (const tr of trozarTemas(izq)) {
+        // Viñetas de otras columnas y pesos de evaluación: nunca son temas.
+        const sinVineta = tr.texto.split(/[•·▪]/)[0].trim()
+        if (sinVineta.length < 2 || /%|test final/i.test(sinVineta)) continue
+        const limpio = sinVineta.replace(/\s*[•·▪]+\s*$/, '')
+        if (limpio.length < 2) continue
+        if (tr.numerado) {
+          temas.push(limpio.slice(0, 260))
+        } else if (temas.length === 0 || tr.suelto) {
+          temas.push(limpio)
+        } else if (limpio.split(/\s+/).length <= 8) {
+          // Continuación del tema previo (renglón corto envuelto).
+          const cand = `${temas[temas.length - 1]} ${limpio}`
+          temas[temas.length - 1] = cand.length <= 260 ? cand : limpio
+        }
+        // Renglón largo sin marca: columna vecina, se descarta.
+      }
+      continue
+    }
+    if (modo === 'inds' && numero !== '') {
+      // En DOCX cada renglón trae [descripción, valor]: basta la primera celda.
+      const base = (celdas.length > 1 && f.xs.length === 0 ? celdas[0] : t).replace(/\s+/g, ' ').trim()
+      if (!base || /^(asignatura|docente)\s*:/i.test(base)) continue
+      if (/^\d{1,3}(?:\.\d+)?\s*%?$/.test(base)) continue // renglón solo con el valor
+      const sinValor = base.replace(/\s*\d{1,3}(?:\.\d+)?\s*%\s*$/, '')
+      const ml = sinValor.match(/^\s*([A-Z])\s*[.)]\s*(.+?)\s*$/)
+      if (ml) {
+        const d = ml[2].replace(/\s*\d{1,3}(?:\.\d+)?\s*%?\s*$/, '').trim()
+        indAbierto = d.length >= 3 ? { letra: ml[1], desc: d } : null
+        if (indAbierto) inds.push(indAbierto)
+        continue
+      }
+      if (/^(valor|indicadores de alcance)/i.test(sinValor) || sinValor.length < 3) continue
+      const descLimpia = sinValor.replace(/\s*\d{1,3}(?:\.\d+)?\s*$/, '')
+      if (indAbierto?.letra) {
+        if (descLimpia.length >= 3) {
+          indAbierto.desc = `${indAbierto.desc} ${descLimpia}`.replace(/\s+/g, ' ').trim()
+        }
+      } else if (descLimpia.length >= 5) {
+        // Renglón sin letra (formato Ética): cada uno es un indicador propio.
+        indAbierto = { letra: null, desc: descLimpia }
+        inds.push(indAbierto)
+      }
+      continue
+    }
+    if (modo === 'matriz' && numero !== '') {
+      // Texto antes del `%`: la descripción puede repartirse en varias celdas
+      // o traer el `%` pegado (`...computadora 30%`).
+      const iPct = celdas.findIndex((c) => /%/.test(c))
+      let base = (iPct < 0 ? celdas : [...celdas.slice(0, iPct), celdas[iPct].split('%')[0]])
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      // Restos del encabezado pegados a la evidencia (`A B C ... (31) ...`).
+      base = base
+        .replace(/^(\(\d+\)\s*)+/, '')
+        .replace(/^(?:[A-Z][\s.]+){2,}/, '')
+        .replace(/competencia\s*\(\d+\)/i, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (!base || /^(?:[A-F]\.?)$/.test(base) ||
+        /^(evidencia|%|indicador|evaluaci|matriz|total|asignatura|desempe)/i.test(base)) {
+        if (/^total\b/i.test(base)) matBuf = ''
+        continue
+      }
+      // Pies de página entre renglones (`Asignatura: ...`, `Docente: ...`).
+      if (/^(asignatura|docente)\s*:/i.test(base)) continue
+      // Palabra suelta tras un `%`: cierre de la evidencia anterior, no una nueva.
+      if (!/%/.test(t) && !/\s/.test(base) && matBuf === '' && evs.length > 0) {
+        evs[evs.length - 1] = `${evs[evs.length - 1]} ${base}`.replace(/\s+/g, ' ').trim()
+        continue
+      }
+      matBuf = matBuf ? `${matBuf} ${base}` : base
+      if (/%/.test(t)) {
+        const limpio = limpiarEvidencia(matBuf, 4)
+        matBuf = ''
+        if (limpio) evs.push(limpio)
+      }
+      continue
+    }
+  }
+  volcarComp()
+  const vistos = new Set<string>()
+  return comps.filter((c) => (vistos.has(c.numero) ? false : (vistos.add(c.numero), true)))
 }
 
 function calcularConfianza(meta: ReturnType<typeof extraerMeta>, comps: Competencia[], raw: string): number {
@@ -573,7 +981,11 @@ function detectarOrientacion(docXml: string): 'portrait' | 'landscape' {
 }
 
 function limpiar(s: string): string {
-  return s.replace(/\s+/g, ' ').replace(/^[:\-–—\s]+/, '').trim()
+  return sinInvisibles(s).replace(/\s+/g, ' ').replace(/^[:\-–—\s]+/, '').trim()
+}
+/** Quita espacios de ancho cero y marcas invisibles (letras `A.​` de Conta). */
+function sinInvisibles(s: string): string {
+  return s.replace(/[\u200b-\u200d\ufeff]/g, '')
 }
 function sinExtension(n: string): string {
   return n.replace(/\.(docx|pdf)$/i, '').replace(/_/g, ' ')
