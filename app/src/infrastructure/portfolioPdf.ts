@@ -146,7 +146,10 @@ export async function ensamblarPortafolio(
       if (!ev) continue
       onProgreso?.(`Evidencia: ${ev.nombreEvidencia.slice(0, 40)}…`)
       const inicio = numPag() + 1
-      const bytes = await generarEvidenciaPDF(ev, mapaDeIndicadores(ev, instrumentacion ?? undefined))
+      // PDF importado: se copia íntegro; editor propio: se genera el FO-14.
+      const bytes = ev.origen === 'pdf' && ev.pdfBase64
+        ? base64ABytes(ev.pdfBase64)
+        : await generarEvidenciaPDF(ev, mapaDeIndicadores(ev, instrumentacion ?? undefined))
       const src = await PDFDocument.load(bytes)
       const pgs = await doc.copyPages(src, src.getPageIndices())
       pgs.forEach((p) => doc.addPage(p))

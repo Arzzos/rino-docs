@@ -299,6 +299,40 @@ describe('términos y privacidad (gate de aceptación)', () => {
   })
 })
 
+describe('evidencias PDF importadas (tal cual se entregaron)', () => {
+  it('validación pide nombre, competencia y archivo (sin bloques)', () => {
+    const imp = { ...base, origen: 'pdf' as const, nombreEvidencia: 'Reporte', competenciaNo: '2', bloques: [], indicadoresSeleccionados: [], pdfBase64: 'eA==' }
+    expect(validarEvidencia(imp)).toEqual([])
+    expect(validarEvidencia({ ...imp, pdfBase64: undefined })).toContain('Archivo PDF requerido')
+    expect(validarEvidencia({ ...imp, nombreEvidencia: '' }).length).toBeGreaterThan(0)
+    expect(validarEvidencia({ ...imp, competenciaNo: '' }).length).toBeGreaterThan(0)
+  })
+  it('el portafolio copia íntegras las páginas importadas', async () => {
+    const { PDFDocument } = await import('pdf-lib')
+    const src = await PDFDocument.create()
+    src.addPage([300, 400])
+    src.addPage([300, 400])
+    const pdfBase64 = Buffer.from(await src.save()).toString('base64')
+    const { ensamblarPortafolio } = await import('../src/infrastructure/portfolioPdf')
+    const ev = { ...base, id: 'imp1', origen: 'pdf' as const, nombreEvidencia: 'Reporte previo', competenciaNo: '2', pdfBase64, pdfPaginas: 2, bloques: [], indicadoresSeleccionados: [] }
+    const out = await ensamblarPortafolio(
+      {
+        id: 'p1', asignaturaId: 'a1', titulo: 'Portafolio', creadaEn: 1,
+        secciones: [
+          { id: 's1', tipo: 'portada', titulo: 'Portada', grupo: 'portada' },
+          { id: 's2', tipo: 'indice', titulo: 'Índice', grupo: 'indice' },
+          { id: 's3', tipo: 'evidencia', titulo: 'Reporte previo', refId: 'imp1', grupo: 'contenido' },
+        ],
+      },
+      [ev], null, [],
+      { asignatura: 'Cálculo', division: 'Div', alumno: 'A 1', docente: 'Doc', grupo: 'G', periodo: 'P' },
+    )
+    const doc = await PDFDocument.load(out)
+    // portada general + 1 de índice + 2 importadas
+    expect(doc.getPageCount()).toBe(4)
+  })
+})
+
 describe('herencia materia → evidencia', () => {
   const perfil = { nombreCompleto: 'Alu', numeroControl: 'E1', division: 'DivP', grupo: 'G0' }
   const vacia = {

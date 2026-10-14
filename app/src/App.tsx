@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react'
-import { DIVISIONES_TESCI, uid, type Alumno, type Diagnostica, type Evidencia, type Instrumentacion } from './domain/types'
+import { DIVISIONES_TESCI, uid, type Alumno, type Competencia, type Diagnostica, type Evidencia, type Instrumentacion } from './domain/types'
 import { aceptacionVigente, guardarAceptacion, leerAceptacion } from './domain/legal'
 import ModalLegal from './ui/Terminos'
 import { necesitaMigracionEvidencia, normalizarEvidencia } from './domain/migrate'
 import { PerfilRepo, db, type AsignaturaMeta, type BorradorEvidencia } from './infrastructure/db'
 import { cargarBorrador, descartarBorrador, expiraEn, haceCuanto, limpiarBorradores, listarBorradores, retomarBorrador } from './infrastructure/borradores'
 import { descargarPDF, generarEvidenciaPDF, mapaDeIndicadores } from './infrastructure/fo14Pdf'
+import { base64ABytes } from './infrastructure/instrumentParser'
+import { bytesABase64 } from './infrastructure/docxFullRender'
+import { PDFDocument } from 'pdf-lib'
+import PreviewModal from './ui/PreviewModal'
 import ErrorBoundary from './ui/ErrorBoundary'
 import Icon, { type IconName } from './ui/icons'
-import MateriasPanel, { btnPri, campo } from './ui/MateriasPanel'
+import MateriasPanel, { btnPri, btnSec, campo } from './ui/MateriasPanel'
 import ConfirmDialog from './ui/ConfirmDialog'
 import EvidenciaEditor from './ui/EvidenciaEditor'
 import PortafolioPanel from './ui/PortafolioPanel'
@@ -205,6 +209,9 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
   const [borradores, setBorradores] = useState<BorradorEvidencia[]>([])
   const [filtro, setFiltro] = useState(asignaturas[0]?.id ?? '')
   const [eliminarId, setEliminarId] = useState<string | null>(null)
+  const [importando, setImportando] = useState(false)
+  const [corrigiendo, setCorrigiendo] = useState<Evidencia | null>(null)
+  const [vistaPdf, setVistaPdf] = useState<{ bytes: Uint8Array; nombre: string } | null>(null)
   const lista = evidencias.filter((e) => !filtro || e.asignaturaId === filtro)
   const borradoresVisibles = borradores.filter((b) => !filtro || b.asignaturaId === filtro)
   const editandoActivo = creando || !!editando
@@ -296,6 +303,7 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
             {asignaturas.map((a) => <option key={a.id} value={a.id} className="text-slate-900">{a.nombre}</option>)}
           </select>
           <button onClick={empezarNueva} className={`${btnPri} flex items-center gap-2`}><Icon name="plus" size={16} /> Nueva</button>
+          <button onClick={() => setImportando(true)} className="touch-btn flex items-center gap-2 rounded-xl t-surface2 px-4 font-semibold" title="Agregar un PDF ya entregado, tal cual se entregó"><Icon name="upload" size={16} /> Importar PDF</button>
         </div>
         {asignaturas.length === 0 && (
           <p className="mt-3 flex items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200">
@@ -325,7 +333,27 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
               </div>
             )
           })}
-          {lista.map((e) => (
+          {lista.map((e) => e.origen === 'pdf' ? (
+            <div key={e.id} className="flex items-center gap-2 rounded-xl border border-sky-400/25 t-inset p-2 text-sm t-ring">
+              <div className="min-w-0">
+                <p className="flex flex-wrap items-center gap-1 truncate font-semibold">
+                  <span className="rounded bg-sky-400 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-950">PDF</span>
+                  {e.nombreEvidencia || '(sin nombre)'} · Comp. {e.competenciaNo}
+                </p>
+                <p className="text-xs t-muted">{e.asignatura}{e.pdfPaginas ? ` · ${e.pdfPaginas} págs.` : ''} · tal cual se entregó</p>
+              </div>
+              <button onClick={() => e.pdfBase64 && setVistaPdf({ bytes: base64ABytes(e.pdfBase64), nombre: e.nombreEvidencia || 'evidencia' })} className="touch-btn ml-auto flex shrink-0 items-center gap-1 rounded-lg t-surface2 px-3" title="Ver PDF">
+                <Icon name="eye" size={15} /> Ver
+              </button>
+              <button onClick={() => e.pdfBase64 && descargarPDF(base64ABytes(e.pdfBase64), e.nombreEvidencia || 'evidencia')} className="touch-btn flex shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-3 font-bold text-slate-950" title="Descargar original">
+                <Icon name="download" size={15} /> PDF
+              </button>
+              <button onClick={() => setCorrigiendo(e)} className="touch-btn shrink-0 rounded-lg t-surface2 px-3" title="Corregir nombre o competencia">Corregir</button>
+              <button onClick={() => setEliminarId(e.id)} className="touch-btn shrink-0 rounded-lg bg-red-500/20 px-2 text-red-200" title="Eliminar evidencia" aria-label="Eliminar evidencia">
+                <Icon name="trash" size={15} />
+              </button>
+            </div>
+          ) : (
             <div key={e.id} className="flex items-center gap-2 rounded-xl t-inset p-2 text-sm t-ring">
               <div className="min-w-0">
                 <p className="truncate font-semibold">{e.nombreEvidencia || '(sin nombre)'} · Comp. {e.competenciaNo}</p>
@@ -351,6 +379,172 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
           onConfirm={() => { db.evidencias.delete(eliminarId).then(recargar); setEliminarId(null) }}
         />
       )}
+      {importando && (
+        <ImportarPdfModal
+          perfil={perfil} asignaturas={asignaturas} instrumentaciones={instrumentaciones} inicialAsigId={filtro}
+          onCancel={() => setImportando(false)}
+          onGuardado={() => { setImportando(false); recargar() }}
+        />
+      )}
+      {corrigiendo && (
+        <CorregirImportadaModal
+          evidencia={corrigiendo}
+          competencias={instrumentaciones.find((i) => i.id === asignaturas.find((a) => a.id === corrigiendo.asignaturaId)?.instrumentacionId)?.competencias ?? []}
+          onCancel={() => setCorrigiendo(null)}
+          onGuardado={() => { setCorrigiendo(null); recargar() }}
+        />
+      )}
+      {vistaPdf && <PreviewModal bytes={vistaPdf.bytes} nombre={vistaPdf.nombre} onClose={() => setVistaPdf(null)} />}
+    </div>
+  )
+}
+
+/** Agrega un PDF ya entregado: se guarda íntegro, solo se capturan nombre y competencia. */
+function ImportarPdfModal({ perfil, asignaturas, instrumentaciones, inicialAsigId, onCancel, onGuardado }: {
+  perfil: Alumno; asignaturas: AsignaturaMeta[]; instrumentaciones: Instrumentacion[];
+  inicialAsigId: string; onCancel: () => void; onGuardado: () => void
+}) {
+  const [asigId, setAsigId] = useState(inicialAsigId || asignaturas[0]?.id || '')
+  const [nombre, setNombre] = useState('')
+  const [comp, setComp] = useState('')
+  const [archivo, setArchivo] = useState<{ nombre: string; mb: number; paginas: number; base64: string } | null>(null)
+  const [msg, setMsg] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const asig = asignaturas.find((a) => a.id === asigId)
+  const inst = instrumentaciones.find((i) => i.id === asig?.instrumentacionId)
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onCancel])
+
+  const elegir = async (f: File) => {
+    setMsg('Leyendo PDF…')
+    setArchivo(null)
+    try {
+      const buf = new Uint8Array(await f.arrayBuffer())
+      const cab = new TextDecoder().decode(buf.slice(0, 5))
+      if (cab !== '%PDF-') { setMsg('El archivo no parece un PDF válido.'); return }
+      const src = await PDFDocument.load(buf)
+      setArchivo({ nombre: f.name, mb: buf.length / 1048576, paginas: src.getPageCount(), base64: bytesABase64(buf) })
+      if (!nombre) setNombre(f.name.replace(/\.pdf$/i, '').slice(0, 80))
+      setMsg('')
+    } catch {
+      setMsg('No se pudo leer el PDF.')
+    }
+  }
+
+  const guardar = async () => {
+    if (!asig) { setMsg('Elige la materia.'); return }
+    if (!nombre.trim()) { setMsg('Escribe el nombre de la actividad.'); return }
+    if (!comp.trim()) { setMsg('Indica la competencia.'); return }
+    if (!archivo) { setMsg('Elige el archivo PDF.'); return }
+    setGuardando(true)
+    try {
+      const ahora = Date.now()
+      await db.evidencias.put({
+        id: uid(), asignaturaId: asig.id, origen: 'pdf',
+        pdfBase64: archivo.base64, pdfPaginas: archivo.paginas,
+        division: perfil.division, grupo: asig.grupo || perfil.grupo,
+        asignatura: asig.nombre, docente: asig.docente,
+        alumnoNombre: perfil.nombreCompleto, numeroControl: perfil.numeroControl,
+        integrantes: [], fechaEntrega: '', competenciaNo: comp.trim(),
+        descripcionCompetencia: inst?.competencias.find((c) => c.numero === comp.trim())?.descripcion ?? '',
+        indicadoresSeleccionados: [], nombreEvidencia: nombre.trim(),
+        bloques: [], creadaEn: ahora, actualizadaEn: ahora,
+      })
+      onGuardado()
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-30 overflow-y-auto bg-black/70 p-4" onClick={onCancel} role="dialog" aria-modal="true" aria-label="Importar PDF entregado">
+      <div className="t-modal mx-auto max-w-xl rounded-2xl border t-line p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold tick">Importar PDF entregado</h3>
+        <p className="text-sm t-muted">Se guarda tal cual se entregó (no editable). Solo importa trabajos propios o con consentimiento.</p>
+        <div className="mt-3 grid gap-2">
+          <label className={`${btnSec} flex cursor-pointer items-center gap-2 text-sm`}>
+            <Icon name="upload" size={15} /> {archivo ? archivo.nombre : 'Elegir PDF'}
+            <input type="file" accept=".pdf,application/pdf" className="sr-only" aria-label="Elegir archivo PDF" onChange={(e) => { const f = e.target.files?.[0]; if (f) elegir(f); e.target.value = '' }} />
+          </label>
+          {archivo && (
+            <p className="text-xs t-muted">{archivo.paginas} págs. · {archivo.mb.toFixed(1)} MB{archivo.mb > 25 ? ' · pesado, el portafolio puede tardar en generarse' : ''}</p>
+          )}
+          <label className="grid gap-1 text-sm font-medium">Materia
+            <select value={asigId} onChange={(e) => setAsigId(e.target.value)} className={campo}>
+              {asignaturas.map((a) => <option key={a.id} value={a.id} className="text-slate-900">{a.nombre}</option>)}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-medium">Nombre de la actividad
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={campo} placeholder="Aparece en el índice del portafolio" />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">Competencia
+            <input value={comp} onChange={(e) => setComp(e.target.value)} className={campo} placeholder="Núm. de competencia" list="comps-importar" />
+            <datalist id="comps-importar">
+              {inst?.competencias.map((c) => <option key={c.numero} value={c.numero}>{c.descripcion.slice(0, 60)}</option>)}
+            </datalist>
+          </label>
+        </div>
+        {msg && <p role="status" className="mt-2 text-sm text-amber-200">{msg}</p>}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button onClick={guardar} disabled={guardando} className={`${btnPri} flex items-center gap-2`}><Icon name="check" size={15} /> {guardando ? 'Guardando…' : 'Agregar'}</button>
+          <button onClick={onCancel} className={btnSec}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Corrige nombre y competencia de un PDF importado (el contenido no cambia). */
+function CorregirImportadaModal({ evidencia, competencias, onCancel, onGuardado }: {
+  evidencia: Evidencia; competencias: Competencia[]; onCancel: () => void; onGuardado: () => void
+}) {
+  const [nombre, setNombre] = useState(evidencia.nombreEvidencia)
+  const [comp, setComp] = useState(evidencia.competenciaNo)
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onCancel])
+
+  const guardar = async () => {
+    if (!nombre.trim()) { setMsg('Escribe el nombre de la actividad.'); return }
+    if (!comp.trim()) { setMsg('Indica la competencia.'); return }
+    await db.evidencias.update(evidencia.id, {
+      nombreEvidencia: nombre.trim(), competenciaNo: comp.trim(),
+      descripcionCompetencia: competencias.find((c) => c.numero === comp.trim())?.descripcion ?? evidencia.descripcionCompetencia,
+      actualizadaEn: Date.now(),
+    })
+    onGuardado()
+  }
+
+  return (
+    <div className="fixed inset-0 z-30 overflow-y-auto bg-black/70 p-4" onClick={onCancel} role="dialog" aria-modal="true" aria-label="Corregir datos del PDF">
+      <div className="t-modal mx-auto max-w-md rounded-2xl border t-line p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold tick">Corregir datos</h3>
+        <p className="text-sm t-muted">Solo nombre y competencia. El PDF no cambia.</p>
+        <div className="mt-3 grid gap-2">
+          <label className="grid gap-1 text-sm font-medium">Nombre de la actividad
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={campo} />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">Competencia
+            <input value={comp} onChange={(e) => setComp(e.target.value)} className={campo} list="comps-corregir" />
+            <datalist id="comps-corregir">
+              {competencias.map((c) => <option key={c.numero} value={c.numero}>{c.descripcion.slice(0, 60)}</option>)}
+            </datalist>
+          </label>
+        </div>
+        {msg && <p role="status" className="mt-2 text-sm text-amber-200">{msg}</p>}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button onClick={guardar} className={`${btnPri} flex items-center gap-2`}><Icon name="check" size={15} /> Guardar</button>
+          <button onClick={onCancel} className={btnSec}>Cancelar</button>
+        </div>
+      </div>
     </div>
   )
 }

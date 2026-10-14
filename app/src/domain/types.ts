@@ -131,6 +131,11 @@ export interface Evidencia {
   indicadoresSeleccionados: string[] // letras
   nombreEvidencia: string
   bloques: BloqueContenido[]
+  /** Origen del contenido: editor propio o PDF ya entregado e importado tal cual. */
+  origen?: 'editor' | 'pdf'
+  /** PDF íntegro importado (solo si origen es 'pdf'). Se copia tal cual al portafolio. */
+  pdfBase64?: string
+  pdfPaginas?: number
   creadaEn: number
   actualizadaEn: number
 }
@@ -176,16 +181,21 @@ export const DIVISIONES_TESCI = [
 
 export function validarEvidencia(e: Evidencia): string[] {
   const errores: string[] = []
+  if (!e.nombreEvidencia.trim()) errores.push('Evidencia de aprendizaje (10) requerida')
+  if (!e.competenciaNo.trim()) errores.push('Competencia No. (7) requerida')
+  if (e.origen === 'pdf') {
+    // El PDF ya trae su formato: solo importan nombre, competencia y archivo.
+    if (!e.pdfBase64) errores.push('Archivo PDF requerido')
+    return errores
+  }
   if (!e.division.trim()) errores.push('División (1) requerida')
   if (!e.grupo.trim()) errores.push('Grupo (2) requerido')
   if (!e.asignatura.trim()) errores.push('Asignatura (3) requerida')
   if (!e.docente.trim()) errores.push('Docente (4) requerido')
   if (!e.alumnoNombre.trim() || !e.numeroControl.trim()) errores.push('Nombre y número de control (5) requeridos')
   if (!e.fechaEntrega.trim()) errores.push('Fecha de entrega (6) requerida')
-  if (!e.competenciaNo.trim()) errores.push('Competencia No. (7) requerida')
   if (!e.descripcionCompetencia.trim()) errores.push('Descripción (8) requerida')
   if (e.indicadoresSeleccionados.length === 0) errores.push('Indicador de alcance (9): selecciona al menos uno')
-  if (!e.nombreEvidencia.trim()) errores.push('Evidencia de aprendizaje (10) requerida')
   if (e.bloques.filter((b) => b.tipo !== 'salto').length === 0) errores.push('Agrega al menos un bloque de contenido')
   return errores
 }
