@@ -6,6 +6,7 @@ Formato: Keep a Changelog + SemVer. Entradas bilingües (ES/EN) por release. / F
 
 ### Añadido / Added
 - Términos de uso y aviso de privacidad con aceptación obligatoria al primer arranque (funcionamiento local, no afiliación al TESCI, código MIT). / Terms of use and privacy notice with mandatory first-run acceptance.
+- Importar PDF entregado: agrega a evidencias un PDF ya entregado tal cual (no editable), con nombre, competencia, vista previa y copia íntegra al portafolio. / Import an already-submitted PDF as read-only evidence, copied as-is into the portfolio.
 
 ### Corregido / Fixed
 - Editor de indicadores de alcance: ya no pierde el foco al teclear ni reaparece el `|` al borrarlo (edición en texto libre con parseo diferido). / Scope-indicator editor no longer loses focus while typing and deleted `|` no longer reappears.
