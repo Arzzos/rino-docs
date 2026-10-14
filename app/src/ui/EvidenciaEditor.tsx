@@ -8,6 +8,7 @@ import { resaltarHTML } from '../infrastructure/codeHighlight'
 import { descargarPDF, generarEvidenciaPDF, mapaDeIndicadores, pdfAUrl } from '../infrastructure/fo14Pdf'
 import PreviewModal from './PreviewModal'
 import VisorPdfMovil, { useEsMovil } from './PdfVista'
+import LimiteVisor from './LimiteVisor'
 import Icon from './icons'
 import { btnPri, btnSec, campo } from './MateriasPanel'
 
@@ -303,7 +304,7 @@ function VistaPreviaViva({ ev, inst }: { ev: Evidencia; inst: Instrumentacion | 
         const b = await generarEvidenciaPDF(ev, mapaDeIndicadores(ev, inst ?? undefined))
         if (vivo) setBytes(b)
       } catch { /* noop */ }
-    }, 800)
+    }, 1200)
     return () => {
       vivo = false
       clearTimeout(id)
@@ -321,7 +322,7 @@ function VistaPreviaViva({ ev, inst }: { ev: Evidencia; inst: Instrumentacion | 
       {abierta && (
         bytes
           ? movil
-            ? <div className="h-[62vh] md:h-[70vh]"><VisorPdfMovil bytes={bytes} nombre="Vista previa del documento" /></div>
+            ? <div className="h-[62vh] md:h-[70vh]"><LimiteVisor bytes={bytes} nombre="Vista previa del documento"><VisorPdfMovil bytes={bytes} nombre="Vista previa del documento" /></LimiteVisor></div>
             : <MarcoNativo bytes={bytes} titulo="Vista previa del documento" clase="h-[62vh] w-full bg-white md:h-[70vh]" />
           : <p role="status" className="px-3 pb-3 text-sm t-muted">Generando vista previa…</p>
       )}

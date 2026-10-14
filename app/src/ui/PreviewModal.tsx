@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { descargarPDF, pdfAUrl } from '../infrastructure/fo14Pdf'
 import Icon from './icons'
 import VisorPdfMovil, { useEsMovil } from './PdfVista'
+import LimiteVisor from './LimiteVisor'
 
 export default function PreviewModal({ bytes, nombre, onClose }: { bytes: Uint8Array; nombre: string; onClose: () => void }) {
   const [url, setUrl] = useState('')
@@ -35,7 +36,7 @@ export default function PreviewModal({ bytes, nombre, onClose }: { bytes: Uint8A
       </div>
       <div className="mx-auto w-full max-w-5xl flex-1 overflow-hidden rounded-xl bg-white" onClick={(e) => e.stopPropagation()}>
         {propio
-          ? <VisorPdfMovil bytes={bytes} nombre={nombre} />
+          ? <LimiteVisor bytes={bytes} nombre={nombre}><VisorPdfMovil bytes={bytes} nombre={nombre} /></LimiteVisor>
           : url && <iframe src={url} title={nombre} className="h-full w-full" />}
       </div>
     </div>

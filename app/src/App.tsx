@@ -212,6 +212,7 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
   const [importando, setImportando] = useState(false)
   const [corrigiendo, setCorrigiendo] = useState<Evidencia | null>(null)
   const [vistaPdf, setVistaPdf] = useState<{ bytes: Uint8Array; nombre: string } | null>(null)
+  const [falloPdf, setFalloPdf] = useState<string | null>(null)
   const lista = evidencias.filter((e) => !filtro || e.asignaturaId === filtro)
   const borradoresVisibles = borradores.filter((b) => !filtro || b.asignaturaId === filtro)
   const editandoActivo = creando || !!editando
@@ -310,6 +311,7 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
             <Icon name="alert" size={16} /> Primero crea una materia y sube su instrumentación en la pestaña Materias.
           </p>
         )}
+        {falloPdf && <p role="alert" className="mt-3 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{falloPdf}</p>}
         <div className="mt-3 grid gap-2">
           {borradoresVisibles.length > 0 && (
             <p className="px-1 text-xs font-bold uppercase tracking-wide t-muted">Borradores ({borradoresVisibles.length})</p>
@@ -342,10 +344,26 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
                 </p>
                 <p className="text-xs t-muted">{e.asignatura}{e.pdfPaginas ? ` · ${e.pdfPaginas} págs.` : ''} · tal cual se entregó</p>
               </div>
-              <button onClick={() => e.pdfBase64 && setVistaPdf({ bytes: base64ABytes(e.pdfBase64), nombre: e.nombreEvidencia || 'evidencia' })} className="touch-btn ml-auto flex shrink-0 items-center gap-1 rounded-lg t-surface2 px-3" title="Ver PDF">
+              <button onClick={() => {
+                if (!e.pdfBase64) return
+                try {
+                  setFalloPdf(null)
+                  setVistaPdf({ bytes: base64ABytes(e.pdfBase64), nombre: e.nombreEvidencia || 'evidencia' })
+                } catch {
+                  setFalloPdf('El PDF guardado está dañado y no se pudo abrir.')
+                }
+              }} className="touch-btn ml-auto flex shrink-0 items-center gap-1 rounded-lg t-surface2 px-3" title="Ver PDF">
                 <Icon name="eye" size={15} /> Ver
               </button>
-              <button onClick={() => e.pdfBase64 && descargarPDF(base64ABytes(e.pdfBase64), e.nombreEvidencia || 'evidencia')} className="touch-btn flex shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-3 font-bold text-slate-950" title="Descargar original">
+              <button onClick={() => {
+                if (!e.pdfBase64) return
+                try {
+                  setFalloPdf(null)
+                  descargarPDF(base64ABytes(e.pdfBase64), e.nombreEvidencia || 'evidencia')
+                } catch {
+                  setFalloPdf('El PDF guardado está dañado y no se pudo descargar.')
+                }
+              }} className="touch-btn flex shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-3 font-bold text-slate-950" title="Descargar original">
                 <Icon name="download" size={15} /> PDF
               </button>
               <button onClick={() => setCorrigiendo(e)} className="touch-btn shrink-0 rounded-lg t-surface2 px-3" title="Corregir nombre o competencia">Corregir</button>
