@@ -12,6 +12,7 @@ import { encajar, sanearWinAnsi } from '../src/infrastructure/pdfTheme'
 import { extraerMembretesDocx } from '../src/infrastructure/docxFullRender'
 import { esContinuacionVMerge } from '../src/infrastructure/docxFullRender'
 import { extraerMeta, extraerMetaTablas, extraerNumeroCompetencia, extraerDescripcion, extraerTemas, extraerIndicadores, extraerEvidencias, textoPdfConLayout, normalizarTextoExtraido, construirInstrumentacion } from '../src/infrastructure/instrumentParser'
+import { SECCIONES_LEGALES, TERMINOS_CLAVE, TERMINOS_VERSION, aceptacionVigente } from '../src/domain/legal'
 import { mapaDeIndicadores } from '../src/infrastructure/fo14Pdf'
 import { generarEvidenciaPDF } from '../src/infrastructure/fo14Pdf'
 
@@ -277,7 +278,29 @@ describe('editor de indicadores (sin foco perdido ni "|" fantasma)', () => {
   })
 })
 
-describe('herencia materia → evidencia', () => {  const perfil = { nombreCompleto: 'Alu', numeroControl: 'E1', division: 'DivP', grupo: 'G0' }
+describe('términos y privacidad (gate de aceptación)', () => {
+  it('solo la versión vigente cuenta como aceptada', () => {
+    expect(aceptacionVigente(TERMINOS_VERSION)).toBe(true)
+    expect(aceptacionVigente(null)).toBe(false)
+    expect(aceptacionVigente('2020-01-01-v0')).toBe(false)
+  })
+  it('clave de almacenamiento y 9 secciones', () => {
+    expect(TERMINOS_CLAVE).toBe('rino.terminos.v1')
+    expect(SECCIONES_LEGALES.map((s) => s.id)).toEqual([
+      'aceptacion', 'servicio', 'tesci', 'privacidad', 'contenido', 'exencion', 'propiedad', 'cambios', 'contacto',
+    ])
+  })
+  it('el documento cubre no-afiliación, funcionamiento local y MIT', async () => {
+    const fuente = readFileSync(join(RAIZ, 'app', 'src', 'ui', 'Terminos.tsx'), 'utf8')
+    expect(fuente).toMatch(/no está afiliada/i)
+    expect(fuente).toMatch(/LocalStorage e IndexedDB/)
+    expect(fuente).toMatch(/Licencia MIT/)
+    expect(fuente).toMatch(/Acepto los términos/)
+  })
+})
+
+describe('herencia materia → evidencia', () => {
+  const perfil = { nombreCompleto: 'Alu', numeroControl: 'E1', division: 'DivP', grupo: 'G0' }
   const vacia = {
     id: '', asignaturaId: '', division: '', grupo: '', asignatura: '', docente: '',
     alumnoNombre: '', numeroControl: '', integrantes: [], fechaEntrega: 'hoy',
