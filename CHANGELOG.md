@@ -10,6 +10,7 @@ Formato: Keep a Changelog + SemVer. Entradas bilingües (ES/EN) por release. / F
 
 ### Corregido / Fixed
 - Editor de indicadores de alcance: ya no pierde el foco al teclear ni reaparece el `|` al borrarlo (edición en texto libre con parseo diferido). / Scope-indicator editor no longer loses focus while typing and deleted `|` no longer reappears.
+- Portafolio en pantallas angostas: las filas de secciones ya no desbordan lateralmente (título truncado + acciones en segunda línea), la navegación inferior permanece fija. / Portfolio on narrow screens no longer overflows horizontally; bottom navigation stays fixed.
 
 ### Cambiado / Changed
 - Despliegue por dashboard de Cloudflare Pages (integración Git) como vía principal; `ci.yml` queda solo con `check` (sin job `deploy` ni secrets). / Dashboard deploys as the primary path; `ci.yml` now checks only.

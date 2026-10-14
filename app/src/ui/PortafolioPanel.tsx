@@ -118,15 +118,17 @@ export default function PortafolioPanel({ asignaturas, instrumentaciones, eviden
                       return a
                     })
                   }}
-                  className="mb-1 flex cursor-grab items-center gap-2 rounded-xl t-inset p-2 text-sm active:cursor-grabbing"
+                  className="mb-1 grid cursor-grab gap-1 rounded-xl t-inset p-2 text-sm active:cursor-grabbing"
                 >
-                  <span className="rounded t-surface2 px-2 py-1 text-[11px] font-bold uppercase">{s.tipo}</span>
-                  <span className="truncate">{s.titulo}</span>
-                  <span className="ml-auto flex gap-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="shrink-0 rounded t-surface2 px-2 py-1 text-[11px] font-bold uppercase">{s.tipo}</span>
+                    <span className="min-w-0 flex-1 truncate">{s.titulo}</span>
+                  </div>
+                  <div className="flex justify-end gap-1">
                     <button onClick={() => mover(s.id, -1)} className="touch-btn rounded t-surface2 px-2" title="Subir" aria-label={`Subir ${s.titulo}`}><Icon name="up" size={14} /></button>
                     <button onClick={() => mover(s.id, 1)} className="touch-btn rounded t-surface2 px-2" title="Bajar" aria-label={`Bajar ${s.titulo}`}><Icon name="down" size={14} /></button>
                     <button onClick={() => setSecciones((arr) => arr.filter((_x, xi) => xi !== i))} className="touch-btn rounded bg-red-500/20 px-2 text-red-200" title="Quitar" aria-label={`Quitar ${s.titulo}`}><Icon name="x" size={14} /></button>
-                  </span>
+                  </div>
                 </div>
               ))}
             </div>
