@@ -734,3 +734,13 @@ describe('parseo PDF paridad con DOCX (FO-205P11000-44)', () => {
     expect(instrumentacion.competencias[0].indicadores.map((x) => x.valor)).toEqual([25, 25, 20, 10, 10, 10])
   }, 60000)
 })
+
+describe('visor pdf adaptativo', () => {
+  it('usa visor propio en táctil con puntero grueso o UA móvil', async () => {
+    const { debeUsarVisorPropio } = await import('../src/ui/PdfVista')
+    expect(debeUsarVisorPropio(true, true, false)).toBe(true)
+    expect(debeUsarVisorPropio(false, true, true)).toBe(true)
+    expect(debeUsarVisorPropio(false, false, false)).toBe(false)
+    expect(debeUsarVisorPropio(true, false, false)).toBe(false)
+  })
+})

@@ -9,6 +9,7 @@ Formato: Keep a Changelog + SemVer. Entradas bilingües (ES/EN) por release. / F
 - Importar PDF entregado: agrega a evidencias un PDF ya entregado tal cual (no editable), con nombre, competencia, vista previa y copia íntegra al portafolio. / Import an already-submitted PDF as read-only evidence, copied as-is into the portfolio.
 
 ### Corregido / Fixed
+- Vista previa en móvil: visor propio con pdf.js en dispositivos táctiles (todas las páginas bajo demanda, sin depender del visor nativo que falla en PWA/móvil); en escritorio se conserva el visor nativo. / Mobile preview now uses a built-in pdf.js viewer on touch devices (all pages on demand); desktop keeps the native viewer.
 - Editor de indicadores de alcance: ya no pierde el foco al teclear ni reaparece el `|` al borrarlo (edición en texto libre con parseo diferido). / Scope-indicator editor no longer loses focus while typing and deleted `|` no longer reappears.
 - Portafolio en pantallas angostas: las filas de secciones ya no desbordan lateralmente (título truncado + acciones en segunda línea), la navegación inferior permanece fija. / Portfolio on narrow screens no longer overflows horizontally; bottom navigation stays fixed.
 
