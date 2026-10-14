@@ -4,6 +4,9 @@ Formato: Keep a Changelog + SemVer. Entradas bilingües (ES/EN) por release. / F
 
 ## [Unreleased] / [Sin publicar]
 
+### Añadido / Added
+- Términos de uso y aviso de privacidad con aceptación obligatoria al primer arranque (funcionamiento local, no afiliación al TESCI, código MIT). / Terms of use and privacy notice with mandatory first-run acceptance.
+
 ### Cambiado / Changed
 - Despliegue por dashboard de Cloudflare Pages (integración Git) como vía principal; `ci.yml` queda solo con `check` (sin job `deploy` ni secrets). / Dashboard deploys as the primary path; `ci.yml` now checks only.
 

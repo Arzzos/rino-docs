@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DIVISIONES_TESCI, uid, type Alumno, type Diagnostica, type Evidencia, type Instrumentacion } from './domain/types'
+import { aceptacionVigente, guardarAceptacion, leerAceptacion } from './domain/legal'
+import ModalLegal from './ui/Terminos'
 import { necesitaMigracionEvidencia, normalizarEvidencia } from './domain/migrate'
 import { PerfilRepo, db, type AsignaturaMeta, type BorradorEvidencia } from './infrastructure/db'
 import { cargarBorrador, descartarBorrador, expiraEn, haceCuanto, limpiarBorradores, listarBorradores, retomarBorrador } from './infrastructure/borradores'
@@ -28,6 +30,10 @@ export default function App() {
   const [evidencias, setEvidencias] = useState<Evidencia[]>([])
   const [diagnosticas, setDiagnosticas] = useState<Diagnostica[]>([])
   const [instalable, setInstalable] = useState<Event | null>(null)
+  // Términos: gate bloqueante hasta aceptar la versión vigente.
+  const [terminosOk, setTerminosOk] = useState(() => aceptacionVigente(leerAceptacion()))
+  const [verTerminos, setVerTerminos] = useState(false)
+  const aceptarTerminos = () => { guardarAceptacion(); setTerminosOk(true) }
   // Durante la edición se oculta la navegación para no perder el progreso.
   const [bloqueoNav, setBloqueoNav] = useState(false)
   const [tema, setTema] = useState<string>(() => {
@@ -119,6 +125,7 @@ export default function App() {
       <footer className="mx-auto max-w-5xl px-4 pb-6 text-center">
         <p className="mb-2 text-[11px] t-muted">Versión alpha — se aceptan comentarios y propuestas de funciones.</p>
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs t-muted">
+          <button onClick={() => setVerTerminos(true)} className="hover:text-sky-300">Términos y privacidad</button>
           <span className="font-semibold t-muted">Desarrollado por Espinal G. Rasiel A.</span>
           <a href="https://github.com/Arzzos" target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-sky-300">
             <Icon name="github" size={14} /> github.com/Arzzos
@@ -131,6 +138,8 @@ export default function App() {
           </a>
         </div>
       </footer>
+      {!terminosOk && <ModalLegal modo="bloqueo" onAceptar={aceptarTerminos} />}
+      {terminosOk && verTerminos && <ModalLegal modo="lectura" onCerrar={() => setVerTerminos(false)} />}
     </div>
   )
 
