@@ -125,21 +125,25 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
   }
 
   return (
-    <section className="card p-4">
-      <h2 className="text-lg font-bold tick">{titulo ?? (inicial ? 'Editar evidencia' : 'Nueva evidencia')} <span className="text-xs font-normal t-muted">FO-205P11000-14</span></h2>
-      <p className="mt-1 text-xs t-faint">Se guarda un borrador automático mientras editas. Caduca en 15 días si no guardas.</p>
-      {aviso && <p role="status" className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/5 p-2 text-xs text-amber-200">{aviso}</p>}
+    <section className="reveal card overflow-hidden">
+      <div className="border-b t-line p-4 md:p-6">
+        <p className="overline">FO-205P11000-14 · Paso {paso + 1} de 3 — {PASOS[paso]}</p>
+        <h2 className="display mt-1 truncate text-3xl font-bold">{titulo ?? (inicial ? 'Editar evidencia' : 'Nueva evidencia')}</h2>
+        <p className="mt-1 text-xs t-muted">Se guarda un borrador automático mientras editas. Caduca en 15 días si no guardas.</p>
+      </div>
+      <div className="p-4 md:p-6">
+      {aviso && <p role="status" className="aviso aviso-warn mt-2 text-xs">{aviso}</p>}
       <ol className="mt-3 grid grid-cols-3 gap-1">
         {PASOS.map((p, i) => (
           <li key={p}>
-            <button onClick={() => setPaso(i)} className={`touch-btn relative w-full overflow-hidden rounded-xl text-sm font-bold transition-all ${paso === i ? 't-tab-active' : i < paso ? 'bg-emerald-500/20 text-emerald-200' : 't-surface t-muted'}`}>
+            <button onClick={() => setPaso(i)} aria-current={paso === i ? 'step' : undefined} className={`touch-btn relative w-full overflow-hidden rounded-xl text-sm font-bold transition-colors ${paso === i ? 't-tab-active' : i < paso ? 'bg-[var(--ok-soft)]' : 't-surface t-muted'}`}>
               <span className="mr-1 inline-grid h-5 w-5 place-items-center rounded-full bg-black/20">{i < paso ? <Icon name="check" size={12} /> : <span className="text-[11px]">{i + 1}</span>}</span>{p}
             </button>
           </li>
         ))}
       </ol>
       <div className="mt-2 h-1 overflow-hidden rounded-full t-inset">
-        <div className="h-full rounded-full bg-gradient-to-r from-[#8a2432] to-[#c9a227] transition-all" style={{ width: `${((paso + 1) / 3) * 100}%` }} />
+        <div className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-200" style={{ width: `${((paso + 1) / 3) * 100}%` }} />
       </div>
 
       {paso === 0 && (
@@ -147,23 +151,23 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
           <label className="grid gap-1 text-sm">Materia
             <select
               value={asigId} onChange={(e) => cambiarMateria(e.target.value)}
-              className={`${campo} ${!asig ? 'ring-2 ring-amber-400/70' : ''}`}
+              className={`${campo} ${!asig ? 'ring-2 ring-[var(--warn-bg)]' : ''}`}
             >
-              <option value="" className="text-slate-900">— elegir materia —</option>
-              {asignaturas.map((a) => <option key={a.id} value={a.id} className="text-slate-900">{a.nombre}</option>)}
+              <option value="">— elegir materia —</option>
+              {asignaturas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
             </select>
-            {!asig && <span className="text-xs text-amber-200">Elige la materia para heredar asignatura, docente y grupo.</span>}
+            {!asig && <span className="text-xs font-semibold text-[var(--warn-bg)]">Elige la materia para heredar asignatura, docente y grupo.</span>}
           </label>
           <label className="grid gap-1 text-sm">Fecha de entrega (6)
             <input value={ev.fechaEntrega} onChange={(e) => setEv({ ...ev, fechaEntrega: e.target.value })} className={campo} />
           </label>
           <label className="grid gap-1 text-sm">Competencia No. (7)
             <select value={ev.competenciaNo} onChange={(e) => elegirCompetencia(e.target.value)} className={campo}>
-              <option value="" className="text-slate-900">— elegir —</option>
-              {(inst?.competencias ?? []).map((c) => <option key={c.numero} value={c.numero} className="text-slate-900">{c.numero} — {c.descripcion.slice(0, 60)}</option>)}
+              <option value="">— elegir —</option>
+              {(inst?.competencias ?? []).map((c) => <option key={c.numero} value={c.numero}>{c.numero} — {c.descripcion.slice(0, 60)}</option>)}
             </select>
             {asig && (!inst || inst.competencias.length === 0) && (
-              <span className="text-xs text-amber-200">Esta materia aún no tiene competencias. Súbelas en Materias.</span>
+              <span className="text-xs font-semibold text-[var(--warn-bg)]">Esta materia aún no tiene competencias. Súbelas en Materias.</span>
             )}
           </label>
           <label className="grid gap-1 text-sm">Evidencia de aprendizaje (10)
@@ -176,7 +180,7 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
             <p className="mb-1 font-semibold">Indicador de alcance (9)</p>
             <div className="flex flex-wrap gap-2">
               {(compSel?.indicadores ?? ['A', 'B', 'C', 'D', 'E', 'F'].map((l) => ({ letra: l, descripcion: `Indicador ${l}` }))).map((ind) => (
-                <label key={ind.letra} className={`touch-btn flex cursor-pointer items-center gap-2 rounded-xl border px-3 ${ev.indicadoresSeleccionados.includes(ind.letra) ? 'border-sky-400 bg-sky-400/15' : 't-line t-surface'}`} title={ind.descripcion}>
+                <label key={ind.letra} className={`touch-btn flex cursor-pointer items-center gap-2 rounded-xl border px-3 ${ev.indicadoresSeleccionados.includes(ind.letra) ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 't-line t-surface'}`} title={ind.descripcion}>
                   <input type="checkbox" className="h-5 w-5" checked={ev.indicadoresSeleccionados.includes(ind.letra)} onChange={() => setEv((p) => ({ ...p, indicadoresSeleccionados: p.indicadoresSeleccionados.includes(ind.letra) ? p.indicadoresSeleccionados.filter((x) => x !== ind.letra) : [...p.indicadoresSeleccionados, ind.letra] }))} />
                   <span className="font-bold">{ind.letra}</span>
                   <span className="max-w-44 truncate text-xs t-muted">{ind.descripcion}</span>
@@ -186,7 +190,7 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
           </div>
           <IntegrantesEditor integrantes={ev.integrantes} onChange={(integrantes) => setEv({ ...ev, integrantes })} />
           {asig && (
-            <p className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-2 text-xs text-emerald-200 md:col-span-2">
+            <p className="aviso aviso-ok flex items-center gap-2 text-xs md:col-span-2">
               <Icon name="check" size={14} />
               Heredado de {asig.nombre}{asig.docente ? ` · ${asig.docente}` : ''}{asig.grupo ? ` · ${asig.grupo}` : ''} — editable arriba si cambia.
             </p>
@@ -214,7 +218,7 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
                   <span className="flex items-center gap-1 font-bold uppercase"><Icon name={b.tipo === 'texto' ? 'text' : b.tipo === 'subtitulo' ? 'title' : b.tipo === 'salto' ? 'doc' : b.tipo === 'codigo' ? 'code' : b.tipo === 'tabla' ? 'table' : b.tipo === 'imagen' ? 'image' : 'link'} size={13} />{b.tipo}</span>
                   <button onClick={() => mover(i, -1)} className="touch-btn rounded t-surface2 px-2" title="Subir" aria-label="Subir bloque"><Icon name="up" size={14} /></button>
                   <button onClick={() => mover(i, 1)} className="touch-btn rounded t-surface2 px-2" title="Bajar" aria-label="Bajar bloque"><Icon name="down" size={14} /></button>
-                  <button onClick={() => setBloques(ev.bloques.filter((x) => x.id !== b.id))} className="touch-btn ml-auto flex items-center gap-1 rounded bg-red-500/20 px-2 text-red-200"><Icon name="x" size={14} /> Quitar</button>
+                  <button onClick={() => setBloques(ev.bloques.filter((x) => x.id !== b.id))} className="touch-btn ml-auto flex items-center gap-1 rounded bg-[var(--bad-soft)] px-2"><Icon name="x" size={14} /> Quitar</button>
                 </div>
                 {b.tipo === 'texto' && <textarea value={b.texto} onChange={(e) => setBloques(ev.bloques.map((x) => (x.id === b.id ? { ...x, texto: e.target.value } : x)))} rows={3} className="w-full rounded-lg t-surface p-2 text-sm" placeholder="Desarrollo de la evidencia…" />}
                 {b.tipo === 'subtitulo' && <input value={b.texto} onChange={(e) => setBloques(ev.bloques.map((x) => (x.id === b.id && x.tipo === 'subtitulo' ? { ...x, texto: e.target.value } : x)))} className="w-full rounded-lg t-surface p-2 text-sm font-bold" placeholder="1. Diseño de Red" />}
@@ -267,25 +271,26 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
         <div className="mt-3 text-sm">
           <p className="font-bold">{ev.nombreEvidencia || '(sin nombre)'} · Comp. {ev.competenciaNo || '—'} · {ev.bloques.length} bloques</p>
           {errores.length > 0
-            ? <ul className="mt-2 list-disc pl-5 text-amber-200">{errores.map((e) => <li key={e}>{e}</li>)}</ul>
-            : <p className="mt-2 text-emerald-300">Validación completa. Lista para exportar.</p>}
+            ? <ul className="mt-2 list-disc pl-5 text-[var(--warn-bg)]">{errores.map((e) => <li key={e}>{e}</li>)}</ul>
+            : <p className="mt-2 font-semibold text-[var(--ok-bg)]">Validación completa. Lista para exportar.</p>}
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={guardar} className={`${btnSec} flex items-center gap-1`}><Icon name="check" size={15} /> Guardar</button>
             <button onClick={async () => { const b = await pdfBytes(); if (b) setPreview(b) }} className={`${btnSec} flex items-center gap-1`}><Icon name="eye" size={15} /> Vista previa</button>
             <button onClick={async () => { const b = await pdfBytes(); if (b) descargarPDF(b, `FO-205P11000-14_${ev.nombreEvidencia.slice(0, 30)}_${ev.numeroControl}`) }} className={`${btnPri} flex items-center gap-1`}><Icon name="download" size={15} /> Descargar PDF</button>
           </div>
-          {estado && <p role="status" className="mt-2 text-sky-200">{estado}</p>}
+          {estado && <p role="status" className="mt-2 font-semibold text-[var(--accent)]">{estado}</p>}
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="barra-accion mt-3 flex flex-wrap items-center gap-2">
         <button disabled={paso === 0} onClick={() => setPaso(paso - 1)} className={`${btnSec} flex items-center gap-1 disabled:opacity-40`}><Icon name="left" size={15} /> Atrás</button>
         {paso === 0 && !asig && asignaturas.length > 0 && (
-          <span className="text-xs text-amber-200">Selecciona la materia para continuar con sus datos.</span>
+          <span className="text-xs font-semibold text-[var(--warn-bg)]">Selecciona la materia para continuar con sus datos.</span>
         )}
         {paso < 2 && <button onClick={() => { if (paso === 0 && !asig && asignaturas.length > 0) { setEstado('Elige primero la materia: de ahí se heredan asignatura, docente y grupo.'); return } setEstado(''); setPaso(paso + 1) }} className={`${btnPri} flex items-center gap-1`}>Siguiente <Icon name="right" size={15} /></button>}
       </div>
-      {estado && paso !== 2 && <p role="status" className="mt-2 text-sm text-sky-200">{estado}</p>}
+      {estado && paso !== 2 && <p role="status" className="mt-2 text-sm font-semibold text-[var(--accent)]">{estado}</p>}
+      </div>
       {preview && <PreviewModal bytes={preview} nombre={`FO-205P11000-14_${ev.nombreEvidencia || 'evidencia'}`} onClose={() => setPreview(null)} />}
     </section>
   )
@@ -352,7 +357,7 @@ function IntegrantesEditor({ integrantes = [], onChange }: { integrantes?: Integ
       {lista.map((x, i) => (
         <div key={i} className="mt-1 flex items-center gap-2 rounded-lg t-inset px-2 py-1">
           <span>{x.nombre} · {x.control}</span>
-          <button onClick={() => onChange(lista.filter((_, j) => j !== i))} className="touch-btn ml-auto rounded bg-red-500/20 px-2 text-red-200">Quitar</button>
+          <button onClick={() => onChange(lista.filter((_, j) => j !== i))} className="touch-btn ml-auto rounded bg-[var(--bad-soft)] px-2">Quitar</button>
         </div>
       ))}
       <div className="mt-2 flex flex-wrap gap-2">
@@ -372,7 +377,7 @@ function CodigoEditor({ b, onChange }: { b: Extract<BloqueContenido, { tipo: 'co
     <div>
       <div className="mb-1 flex items-center gap-2">
         <select value={b.lenguaje} onChange={(e) => onChange({ ...b, lenguaje: e.target.value as never })} className="touch-btn rounded-lg border t-line t-surface px-2 text-sm">
-          {LENGUAJES_CODIGO.map((l) => <option key={l.id} value={l.id} className="text-slate-900">{l.label}</option>)}
+          {LENGUAJES_CODIGO.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
         </select>
         <button onClick={copiar} className="touch-btn flex items-center gap-1 rounded-lg t-surface2 px-3 text-sm"><Icon name="copy" size={14} /> Copiar</button>
       </div>
@@ -405,7 +410,7 @@ function TablaEditor({ b, onChange }: { b: Extract<BloqueContenido, { tipo: 'tab
                   <input value={c} onChange={(e) => { const filas = b.filas.map((r, k) => (k === i ? r.map((v, l) => (l === j ? e.target.value : v)) : r)); onChange({ ...b, filas }) }} className="w-full bg-transparent" />
                 </td>
               ))}
-                <td><button onClick={() => onChange({ ...b, filas: b.filas.filter((_, k) => k !== i) })} className="touch-btn rounded bg-red-500/20 px-2 text-red-200" title="Eliminar fila"><Icon name="x" size={14} /></button></td>
+                <td><button onClick={() => onChange({ ...b, filas: b.filas.filter((_, k) => k !== i) })} className="touch-btn rounded bg-[var(--bad-soft)] px-2" title="Eliminar fila"><Icon name="x" size={14} /></button></td>
               </tr>
             ))}
           </tbody>

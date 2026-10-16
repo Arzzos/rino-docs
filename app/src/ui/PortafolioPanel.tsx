@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ORDEN_GRUPOS, grupoDe, uid, type Diagnostica, type Evidencia, type GrupoSeccion, type Instrumentacion, type PortafolioSeccion } from '../domain/types'
+import { aplicarPresetOrden, moverSeccion, uid, type Diagnostica, type Evidencia, type GrupoSeccion, type Instrumentacion, type PortafolioSeccion, type PresetOrden } from '../domain/types'
 import { db, type AsignaturaMeta } from '../infrastructure/db'
 import { descargarPDF } from '../infrastructure/fo14Pdf'
 import { ensamblarPortafolio } from '../infrastructure/portfolioPdf'
@@ -45,18 +45,9 @@ export default function PortafolioPanel({ asignaturas, instrumentaciones, eviden
   useEffect(() => { reconstruir() }, [asigId])
   // eslint-disable-next-line react-hooks/exhaustive-deps
 
-  const mover = (id: string, d: number) => setSecciones((arr) => {
-    // solo dentro del mismo grupo (orden de grupos fijo, orden interno libre)
-    const idx = arr.map((x) => x.id)
-    const i = idx.indexOf(id)
-    const j = i + d
-    if (i < 0 || j < 0 || j >= arr.length) return arr
-    const g = (x: PortafolioSeccion) => x.grupo ?? grupoDe(x.tipo)
-    if (g(arr[i]) !== g(arr[j])) return arr
-    const a = [...arr]
-    ;[a[i], a[j]] = [a[j], a[i]]
-    return a
-  })
+  const mover = (id: string, d: number) => setSecciones((arr) => moverSeccion(arr, id, d))
+
+  const aplicarPreset = (p: PresetOrden) => setSecciones((arr) => aplicarPresetOrden(arr, p))
 
   const generar = async (): Promise<Uint8Array | null> => {
     if (!asig) { setMsg('Elige una materia.'); return null }
@@ -82,66 +73,68 @@ export default function PortafolioPanel({ asignaturas, instrumentaciones, eviden
   }
 
   return (
-    <section className="card p-4">
-      <h2 className="text-lg font-bold tick">Ensamblador de portafolios</h2>
-      <p className="text-sm t-muted">Grupos en orden institucional fijo; dentro de cada grupo ordenas libremente.</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <select value={asigId} onChange={(e) => setAsigId(e.target.value)} className={`${campo} flex-1`}>
-          {asignaturas.map((a) => <option key={a.id} value={a.id} className="text-slate-900">{a.nombre}</option>)}
-        </select>
-        <button onClick={reconstruir} className={`${btnSec} flex items-center gap-1`}><Icon name="sliders" size={15} /> Re-armar secciones</button>
+    <section className="reveal card overflow-hidden">
+      <div className="border-b t-line p-4 md:p-6">
+        <p className="overline">Paso 3 — Entrega institucional</p>
+        <h2 className="display mt-1 text-3xl font-bold">Portafolio</h2>
+        <p className="mt-1 text-sm t-muted">La portada siempre va primera. Índice e instrumentación se mueven como bloques libres.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <select value={asigId} onChange={(e) => setAsigId(e.target.value)} aria-label="Elegir materia" className={`${campo} max-w-56 flex-1`}>
+            {asignaturas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+          </select>
+          <button onClick={reconstruir} className={`${btnSec} flex items-center gap-1`}><Icon name="sliders" size={15} /> Re-armar secciones</button>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Orden sugerido">
+          <button onClick={() => aplicarPreset('institucional')} className={`${btnSec} text-xs`}>Orden institucional</button>
+          <button onClick={() => aplicarPreset('indice-final')} className={`${btnSec} text-xs`}>Índice al final</button>
+          <button onClick={() => aplicarPreset('instrumentacion-final')} className={`${btnSec} text-xs`}>Instrumentación al final</button>
+        </div>
       </div>
-
-      <div className="mt-3 grid gap-3">
-        {ORDEN_GRUPOS.map((g) => {
-          const items = secciones.map((s, i) => ({ s, i })).filter(({ s }) => (s.grupo ?? grupoDe(s.tipo)) === g)
-          if (!items.length) return null
+      <ol className="anim grid gap-2 p-4 md:p-6">
+        {secciones.map((s, i) => {
+          const fija = s.tipo === 'portada'
           return (
-            <div key={g} className="rounded-xl border t-line p-2">
-              <p className="px-1 pb-1 text-xs font-bold uppercase tracking-wide t-muted">{NOMBRE_GRUPO[g]}</p>
-              {items.map(({ s, i }) => (
-                <div
-                  key={s.id} draggable
-                  onDragStart={(e) => e.dataTransfer.setData('text/plain', s.id)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    const from = e.dataTransfer.getData('text/plain')
-                    setSecciones((arr) => {
-                      const a = arr.filter((x) => x.id !== from)
-                      const me = arr.find((x) => x.id === from)
-                      if (!me) return arr
-                      const gg = (x: PortafolioSeccion) => x.grupo ?? grupoDe(x.tipo)
-                      if (gg(me) !== g) return arr // sin cruzar grupos
-                      const toIdx = a.findIndex((x) => x.id === s.id)
-                      a.splice(toIdx, 0, me)
-                      return a
-                    })
-                  }}
-                  className="mb-1 grid cursor-grab gap-1 rounded-xl t-inset p-2 text-sm active:cursor-grabbing"
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="shrink-0 rounded t-surface2 px-2 py-1 text-[11px] font-bold uppercase">{s.tipo}</span>
-                    <span className="min-w-0 flex-1 truncate">{s.titulo}</span>
-                  </div>
-                  <div className="flex justify-end gap-1">
-                    <button onClick={() => mover(s.id, -1)} className="touch-btn rounded t-surface2 px-2" title="Subir" aria-label={`Subir ${s.titulo}`}><Icon name="up" size={14} /></button>
-                    <button onClick={() => mover(s.id, 1)} className="touch-btn rounded t-surface2 px-2" title="Bajar" aria-label={`Bajar ${s.titulo}`}><Icon name="down" size={14} /></button>
-                    <button onClick={() => setSecciones((arr) => arr.filter((_x, xi) => xi !== i))} className="touch-btn rounded bg-red-500/20 px-2 text-red-200" title="Quitar" aria-label={`Quitar ${s.titulo}`}><Icon name="x" size={14} /></button>
-                  </div>
+            <li
+              key={s.id}
+              draggable={!fija}
+              onDragStart={(e) => { if (!fija) e.dataTransfer.setData('text/plain', s.id) }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault()
+                const from = e.dataTransfer.getData('text/plain')
+                setSecciones((arr) => {
+                  const me = arr.find((x) => x.id === from)
+                  if (!me || me.tipo === 'portada') return arr
+                  const sin = arr.filter((x) => x.id !== from)
+                  const destino = Math.max(1, sin.findIndex((x) => x.id === s.id))
+                  sin.splice(destino < 0 ? sin.length : destino, 0, me)
+                  return sin
+                })
+              }}
+              className={`grid gap-1 rounded-xl border t-line p-2 text-sm ${fija ? '' : 'cursor-grab active:cursor-grabbing'} t-inset`}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="shrink-0 rounded t-surface2 px-2 py-1 text-[11px] font-bold uppercase">{NOMBRE_GRUPO[s.grupo ?? 'contenido']}</span>
+                <span className="min-w-0 flex-1 truncate">{i === 0 ? `${s.titulo} (fija)` : s.titulo}</span>
+              </div>
+              {!fija && (
+                <div className="flex justify-end gap-1">
+                  <button onClick={() => mover(s.id, -1)} className="touch-btn rounded t-surface2 px-2" title="Subir" aria-label={`Subir ${s.titulo}`}><Icon name="up" size={14} /></button>
+                  <button onClick={() => mover(s.id, 1)} className="touch-btn rounded t-surface2 px-2" title="Bajar" aria-label={`Bajar ${s.titulo}`}><Icon name="down" size={14} /></button>
+                  <button onClick={() => setSecciones((arr) => arr.filter((_x, xi) => xi !== i))} className="touch-btn rounded bg-[var(--bad-soft)] px-2" title="Quitar" aria-label={`Quitar ${s.titulo}`}><Icon name="x" size={14} /></button>
                 </div>
-              ))}
-            </div>
+              )}
+            </li>
           )
         })}
-      </div>
+      </ol>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button onClick={async () => { const b = await generar(); if (b) setPreview(b) }} className={`${btnSec} flex items-center gap-1`}><Icon name="eye" size={15} /> Vista previa</button>
+      <div className="barra-accion flex flex-wrap gap-2 border-t t-line p-4 md:px-6">
         <button onClick={async () => { const b = await generar(); if (b && asig) descargarPDF(b, `Portafolio_${asig.nombre.slice(0, 25)}`) }} className={`${btnPri} flex items-center gap-1`}><Icon name="download" size={15} /> Generar portafolio PDF</button>
+        <button onClick={async () => { const b = await generar(); if (b) setPreview(b) }} className={`${btnSec} flex items-center gap-1`}><Icon name="eye" size={15} /> Vista previa</button>
       </div>
-      {msg && <p role="status" className="mt-2 text-sm text-sky-200">{msg}</p>}
-      {!inst && <p className="mt-2 text-sm text-amber-200">Sin instrumentación: súbela en Materias.</p>}
+      {msg && <p role="status" className="px-4 text-sm font-semibold text-[var(--accent)] md:px-6">{msg}</p>}
+      {!inst && <div className="px-4 pb-4 md:px-6"><p className="aviso aviso-warn">Sin instrumentación: súbela en Materias.</p></div>}
       {preview && asig && <PreviewModal bytes={preview} nombre={`Portafolio_${asig.nombre}`} onClose={() => setPreview(null)} />}
     </section>
   )

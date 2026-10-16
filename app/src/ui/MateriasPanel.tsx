@@ -91,20 +91,21 @@ export default function MateriasPanel({ asignaturas, instrumentaciones, diagnost
   }
 
   return (
-    <div className="grid gap-4">
-      <section className="card p-4">
-        <h2 className="text-lg font-bold tick">Materias e instrumentaciones</h2>
-        <p className="text-sm t-muted">Sube la instrumentación de tu materia para comenzar. Se recomienda en DOCX.</p>
-        <label className={`${btnPri} mt-3 inline-flex cursor-pointer items-center gap-2`}>
-          <Icon name="upload" size={16} /> Agregar materia desde instrumentación (DOCX recomendado)
+    <div className="anim grid gap-4">
+      <section className="card p-4 md:p-6">
+        <p className="overline">Paso 1 — Base del portafolio</p>
+        <h2 className="display mt-1 text-3xl font-bold">Materias</h2>
+        <p className="mt-1 text-sm t-muted">Sube la instrumentación de tu materia para comenzar. Se recomienda en DOCX: conserva estructura y metadatos.</p>
+        <label className={`${btnPri} mt-4 inline-flex cursor-pointer items-center gap-2`}>
+          <Icon name="upload" size={16} /> Agregar materia desde instrumentación
           <input type="file" accept=".pdf,.docx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) subirNueva(f); e.target.value = '' }} />
         </label>
-        {msg && <p role="status" className="mt-2 text-sm text-amber-200">{msg}</p>}
+        {msg && <p role="status" className="mt-2 text-sm font-semibold text-[var(--accent)]">{msg}</p>}
         {asignaturas.length === 0 && (
           <p className="mt-2 text-sm t-muted">Después: crea evidencias y arma el portafolio en sus pestañas.</p>
         )}
         {fallaManual && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/5 p-2 text-sm">
+          <div className="aviso aviso-warn mt-2 flex flex-wrap items-center gap-2">
             <span className="t-muted">Si el archivo es ilegible:</span>
             <input value={nombreManual} onChange={(e) => setNombreManual(e.target.value)} placeholder="Nombre de la materia" className={`${campo} flex-1`} />
             <button onClick={crearManual} className={btnSec}>Crear vacía</button>
@@ -116,13 +117,17 @@ export default function MateriasPanel({ asignaturas, instrumentaciones, diagnost
         const inst = instrumentaciones.find((i) => i.id === a.instrumentacionId)
         const diags = diagnosticas.filter((d) => d.asignaturaId === a.id)
         return (
-          <section key={a.id} className="card p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <div>
-                <p className="font-bold">{a.nombre}</p>
-                <p className="text-xs t-muted">{a.docente} · {a.grupo} · {a.periodo}</p>
+          <section key={a.id} className="card overflow-hidden">
+            <div className="flex flex-wrap items-center gap-2 border-b t-line p-4">
+              <div className="min-w-0 flex-1">
+                <p className="overline">Materia</p>
+                <p className="display truncate text-xl font-bold">{a.nombre}</p>
+                <p className="text-xs t-muted">{[a.docente, a.grupo, a.periodo].filter(Boolean).join(' · ') || 'Sin datos — súbelos desde la instrumentación'}</p>
               </div>
-              <label className={`${btnSec} ml-auto flex cursor-pointer items-center gap-1`}>
+              {inst && (inst.necesitaRevision
+                ? <span className="insignia insignia-warn shrink-0">Revisar</span>
+                : <span className="insignia insignia-ok shrink-0">{inst.competencias.length} comp.</span>)}
+              <label className={`${btnSec} flex cursor-pointer items-center gap-1 text-sm`}>
                 <Icon name="upload" size={15} /> Subir .docx / PDF
                 <input type="file" accept=".pdf,.docx" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) subir(a.id, f); e.target.value = '' }} />
               </label>
@@ -133,10 +138,11 @@ export default function MateriasPanel({ asignaturas, instrumentaciones, diagnost
                 </button>
               )}
             </div>
+            <div className="p-4">
             {inst ? (
-              <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-sm">
-                <p className="font-semibold text-emerald-200">{inst.originalNombre} · {inst.competencias.length} competencias · {inst.originalOrientacion}</p>
-                {inst.necesitaRevision && <p className="text-amber-200">Revisa los datos detectados.</p>}
+              <div className="aviso aviso-ok">
+                <p className="font-semibold">{inst.originalNombre} · {inst.competencias.length} competencias · {inst.originalOrientacion}</p>
+                {inst.necesitaRevision && <p className="font-semibold text-[var(--warn-bg)]">Revisa los datos detectados.</p>}
                 <div className="mt-2 grid gap-2">
                   {inst.competencias.map((c, i) => (
                     <details key={i} className="rounded-lg t-inset p-2">
@@ -146,10 +152,11 @@ export default function MateriasPanel({ asignaturas, instrumentaciones, diagnost
                     </details>
                   ))}
                 </div>
-                <button onClick={() => setEditando(inst)} className="touch-btn mt-2 flex items-center gap-1 rounded-xl bg-amber-400 px-4 font-bold text-slate-950"><Icon name="check" size={15} /> Validar / editar</button>
+                <button onClick={() => setEditando(inst)} className="touch-btn mt-2 flex items-center gap-1 rounded-xl bg-[var(--warn-bg)] px-4 font-bold text-[var(--warn-ink)]"><Icon name="check" size={15} /> Validar / editar</button>
               </div>
-            ) : <p className="mt-2 text-sm t-muted">Sin instrumentación cargada.</p>}
+            ) : <p className="text-sm t-muted">Sin instrumentación cargada.</p>}
             <DiagnosticasEditor asignaturaId={a.id} diags={diags} recargar={recargar} />
+            </div>
           </section>
         )
       })}
@@ -189,7 +196,7 @@ function DiagnosticasEditor({ asignaturaId, diags, recargar }: { asignaturaId: s
           <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) agregar(f); e.target.value = '' }} />
         </label>
       </div>
-      {msg && <p role="status" className="mt-1 text-xs text-sky-200">{msg}</p>}
+      {msg && <p role="status" className="mt-1 text-xs font-semibold text-[var(--accent)]">{msg}</p>}
       {diags.map((d) => (
         <div key={d.id} className="mt-2 flex items-center gap-2 rounded-lg t-inset p-2 text-sm">
           <img src={d.imagenDataUrl} alt="" className="h-12 w-12 rounded object-cover" />
@@ -197,7 +204,7 @@ function DiagnosticasEditor({ asignaturaId, diags, recargar }: { asignaturaId: s
           <label className="ml-auto flex items-center gap-1 text-xs t-muted">Tamaño
             <input type="range" min={40} max={100} value={Math.round(d.escala * 100)} onChange={(e) => db.diagnosticas.update(d.id, { escala: parseInt(e.target.value) / 100 }).then(recargar)} className="h-8 w-24" />
           </label>
-          <button onClick={() => db.diagnosticas.delete(d.id).then(recargar)} className="touch-btn rounded-lg bg-red-500/20 px-2 text-red-200" title="Quitar" aria-label={`Quitar ${d.nombreHoja}`}><Icon name="x" size={14} /></button>
+          <button onClick={() => db.diagnosticas.delete(d.id).then(recargar)} className="touch-btn rounded-lg bg-[var(--bad-soft)] px-2" title="Quitar" aria-label={`Quitar ${d.nombreHoja}`}><Icon name="x" size={14} /></button>
         </div>
       ))}
     </div>
@@ -218,14 +225,14 @@ function PreAltaModal({ inst, onConfirm, onCancel }: { inst: Instrumentacion; on
       <input
         value={valor} onChange={(e) => set(e.target.value)}
         placeholder={faltante(valor) ? 'Falta — captúralo aquí' : undefined}
-        className={`${campo} ${faltante(valor) ? 'ring-2 ring-amber-400/70' : ''}`}
+        className={`${campo} ${faltante(valor) ? 'ring-2 ring-[var(--warn-bg)]' : ''}`}
       />
     </label>
   )
   return (
-    <div className="fixed inset-0 z-30 overflow-y-auto bg-black/70 p-4" onClick={onCancel} role="dialog" aria-modal="true" aria-label="Confirmar materia">
-      <div className="t-modal mx-auto max-w-xl rounded-2xl border t-line p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold tick">Confirmar materia</h3>
+    <div className="fixed inset-0 z-30 overflow-y-auto bg-black/70 px-0 pb-0 pt-[10dvh] md:p-4" onClick={onCancel} role="dialog" aria-modal="true" aria-label="Confirmar materia">
+      <div className="dialogo mx-auto max-w-xl p-4 md:p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="display text-2xl font-bold">Confirmar materia</h3>
         <p className="text-sm t-muted">
           Se detectaron {inst.competencias.length} competencias en <span className="font-semibold t-ink2">{inst.originalNombre}</span>.
         </p>
@@ -261,9 +268,9 @@ function EditorInstrumentacion({ inst, cerrar }: { inst: Instrumentacion; cerrar
     cerrar()
   }
   return (
-    <div className="fixed inset-0 z-30 overflow-y-auto bg-black/70 p-4" onClick={cerrar} role="dialog" aria-modal="true" aria-label={`Validar instrumentación de ${draft.asignatura}`}>
-      <div className="mx-auto max-w-3xl rounded-2xl t-modal p-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold">Validar instrumentación — {draft.asignatura}</h3>
+    <div className="fixed inset-0 z-30 overflow-y-auto bg-black/70 px-0 pb-0 pt-[10dvh] md:p-4" onClick={cerrar} role="dialog" aria-modal="true" aria-label={`Validar instrumentación de ${draft.asignatura}`}>
+      <div className="dialogo mx-auto max-w-3xl p-4 md:p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="display text-2xl font-bold">Validar instrumentación — {draft.asignatura}</h3>
         <p className="text-sm t-muted">Corrige los datos si es necesario.</p>
         <div className="mt-2 grid gap-2 md:grid-cols-2">
           {(['asignatura', 'docente', 'grupo', 'periodo', 'division'] as const).map((k) => (
@@ -295,7 +302,7 @@ function EditorInstrumentacion({ inst, cerrar }: { inst: Instrumentacion; cerrar
         ))}
         <div className="mt-3 flex flex-wrap gap-2">
           <button onClick={() => setDraft({ ...draft, competencias: [...draft.competencias, { numero: String(draft.competencias.length + 1), descripcion: '', temas: [], indicadores: [], evidenciasSugeridas: [] }] })} className={`${btnSec} flex items-center gap-1`}><Icon name="plus" size={15} /> Competencia</button>
-          <button onClick={guardar} className="touch-btn flex items-center gap-1 rounded-xl bg-emerald-400 px-5 font-bold text-slate-950"><Icon name="check" size={15} /> Guardar validado</button>
+          <button onClick={guardar} className="touch-btn flex items-center gap-1 rounded-xl bg-[var(--ok-bg)] px-5 font-bold text-[var(--ok-ink)]"><Icon name="check" size={15} /> Guardar validado</button>
           <button onClick={cerrar} className={btnSec}>Cerrar</button>
         </div>
       </div>

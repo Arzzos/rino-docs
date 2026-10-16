@@ -11,7 +11,7 @@ import { bytesABase64 } from './infrastructure/docxFullRender'
 import { PDFDocument } from 'pdf-lib'
 import PreviewModal from './ui/PreviewModal'
 import ErrorBoundary from './ui/ErrorBoundary'
-import Icon, { type IconName } from './ui/icons'
+import Icon, { MarcaRD, type IconName } from './ui/icons'
 import MateriasPanel, { btnPri, btnSec, campo } from './ui/MateriasPanel'
 import ConfirmDialog from './ui/ConfirmDialog'
 import EvidenciaEditor from './ui/EvidenciaEditor'
@@ -64,14 +64,13 @@ export default function App() {
 
   return (
     <div className="min-h-dvh t-bg pb-24 t-ink md:pb-10">
-      <header className="brand-header sticky top-0 z-20 border-b t-line backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[#a52c3c] to-[#5e1620] text-[#faf5ec]">
-            <Icon name="shield" size={20} />
-          </span>
+      <a href="#contenido" className="skip-link">Saltar al contenido</a>
+      <header className="brand-header sticky top-0 z-20">
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 pt-4">
+          <MarcaRD size={48} />
           <div className="leading-tight">
-            <p className="text-sm font-bold tracking-wide">RINO DOCS</p>
-            <p className="text-[11px] t-muted">Portafolios y evidencias · TESCI</p>
+            <p className="display text-2xl font-bold">Rino Docs</p>
+            <p className="overline mt-0.5">Portafolios y evidencias</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button
@@ -83,28 +82,30 @@ export default function App() {
               <Icon name={tema === 'dark' ? 'sun' : 'moon'} size={17} />
             </button>
             {instalable && (
-              <button className="touch-btn flex items-center gap-1 rounded-lg bg-amber-400 px-3 text-sm font-bold text-slate-950"
+              <button className="touch-btn flex items-center gap-1 rounded-xl bg-[var(--accent)] px-3 text-sm font-bold text-[var(--accent-ink)]"
                 onClick={() => { (instalable as unknown as { prompt: () => void }).prompt(); setInstalable(null) }}>
                 <Icon name="download" size={15} /> Instalar
               </button>
             )}
           </div>
         </div>
-        <nav className="mx-auto hidden max-w-5xl grid-cols-4 gap-1 px-4 py-3 md:grid" aria-label="Pestañas">
-          {bloqueoNav ? (
-            <p role="status" className="col-span-4 rounded-xl t-inset px-3 py-2 text-center text-xs t-muted">Editando evidencia — vuelve a Mis evidencias para cambiar de pestaña.</p>
-          ) : (
-            TABS.map((t) => (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className={`touch-btn flex items-center justify-center gap-2 rounded-xl px-2 text-sm font-semibold transition-colors ${tab === t.id ? 't-tab-active' : 't-surface t-ink2 t-hover'}`}>
-                <Icon name={t.icon} size={16} /> {t.label}
-              </button>
-            ))
-          )}
-        </nav>
+        <div className="mx-auto max-w-6xl px-4 py-3">
+          <nav className="seg mx-auto hidden max-w-5xl grid-cols-4 gap-1 md:grid" aria-label="Pestañas">
+            {bloqueoNav ? (
+              <p role="status" className="col-span-4 rounded-xl t-inset px-3 py-2 text-center text-xs t-muted">Editando evidencia — vuelve a Mis evidencias para cambiar de pestaña.</p>
+            ) : (
+              TABS.map((t) => (
+                <button key={t.id} onClick={() => setTab(t.id)} aria-current={tab === t.id ? 'page' : undefined}
+                  className={`touch-btn flex items-center justify-center gap-2 rounded-xl px-2 text-sm font-semibold transition-colors ${tab === t.id ? 't-tab-active' : 't-hover t-ink2'}`}>
+                  <Icon name={t.icon} size={16} /> {t.label}
+                </button>
+              ))
+            )}
+          </nav>
+        </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-5">
+      <main id="contenido" className="mx-auto max-w-6xl px-4 py-6">
         <ErrorBoundary>
           {tab === 'perfil' && <PerfilPanel perfil={perfil} setPerfil={setPerfil} />}
           {tab === 'materias' && <MateriasPanel asignaturas={asignaturas} instrumentaciones={instrumentaciones} diagnosticas={diagnosticas} recargar={recargar} />}
@@ -113,12 +114,12 @@ export default function App() {
         </ErrorBoundary>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 gap-1 border-t t-line t-bg95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden" aria-label="Pestañas">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 gap-1 border-t t-line t-bg95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden" aria-label="Pestañas">
         {bloqueoNav ? (
           <p role="status" className="col-span-4 rounded-xl t-inset px-3 py-2 text-center text-[11px] t-muted">Editando evidencia — vuelve a Mis evidencias para cambiar de pestaña.</p>
         ) : (
           TABS.map((t) => (
-            <button key={t.id} onClick={() => { setTab(t.id); window.scrollTo({ top: 0 }) }}
+            <button key={t.id} onClick={() => { setTab(t.id); window.scrollTo({ top: 0 }) }} aria-current={tab === t.id ? 'page' : undefined}
               className={`touch-btn flex flex-col items-center gap-0.5 rounded-xl py-2 text-[11px] font-bold transition-colors ${tab === t.id ? 't-tab-active' : 't-surface t-muted'}`}>
               <Icon name={t.icon} size={19} />{t.label}
             </button>
@@ -126,20 +127,23 @@ export default function App() {
         )}
       </nav>
 
-      <footer className="mx-auto max-w-5xl px-4 pb-6 text-center">
-        <p className="mb-2 text-[11px] t-muted">Versión alpha — se aceptan comentarios y propuestas de funciones.</p>
+      <footer className="mx-auto max-w-6xl px-4 pb-8 pt-2">
+        <div className="flex flex-col items-center gap-2 border-t t-line pt-5 text-center">
+          <p className="display text-lg font-bold">Rino Docs</p>
+          <p className="text-[11px] t-muted">Versión beta — puede haber errores; tus comentarios ayudan a mejorarla.</p>
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs t-muted">
-          <button onClick={() => setVerTerminos(true)} className="hover:text-sky-300">Términos y privacidad</button>
+          <button onClick={() => setVerTerminos(true)} className="underline decoration-[var(--line)] underline-offset-4 hover:text-[var(--accent)]">Términos y privacidad</button>
           <span className="font-semibold t-muted">Desarrollado por Espinal G. Rasiel A.</span>
-          <a href="https://github.com/Arzzos" target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-sky-300">
+          <a href="https://github.com/Arzzos" target="_blank" rel="noreferrer" className="flex items-center gap-1 underline decoration-[var(--line)] underline-offset-4 hover:text-[var(--accent)]">
             <Icon name="github" size={14} /> github.com/Arzzos
           </a>
-          <a href="https://arzzos.com" target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-sky-300">
+          <a href="https://arzzos.com" target="_blank" rel="noreferrer" className="flex items-center gap-1 underline decoration-[var(--line)] underline-offset-4 hover:text-[var(--accent)]">
             <Icon name="globe" size={14} /> arzzos.com
           </a>
-          <a href="https://instagram.com/arzzos" target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-sky-300">
+          <a href="https://instagram.com/arzzos" target="_blank" rel="noreferrer" className="flex items-center gap-1 underline decoration-[var(--line)] underline-offset-4 hover:text-[var(--accent)]">
             <Icon name="insta" size={14} /> instagram.com/arzzos
           </a>
+          </div>
         </div>
       </footer>
       {!terminosOk && <ModalLegal modo="bloqueo" onAceptar={aceptarTerminos} />}
@@ -171,11 +175,21 @@ export default function App() {
 function PerfilPanel({ perfil, setPerfil }: { perfil: Alumno; setPerfil: (p: Alumno) => void }) {
   const [ok, setOk] = useState(false)
   const guardar = () => { PerfilRepo.guardar(perfil); setOk(true); setTimeout(() => setOk(false), 2000) }
+  const inicial = (perfil.nombreCompleto.trim()[0] ?? '·').toUpperCase()
   return (
-    <section className="reveal card p-4 md:p-6">
-      <h2 className="text-lg font-bold tick">Perfil del estudiante</h2>
-      <p className="mb-4 text-sm t-muted">Se hereda en todos los membretes. El equipo se agrega por evidencia.</p>
-      <div className="grid gap-3 md:grid-cols-2">
+    <section className="reveal card overflow-hidden">
+      <div className="flex items-center gap-4 border-b t-line p-4 md:p-6">
+        <span aria-hidden="true" className="display grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[var(--accent)] text-2xl font-bold text-[var(--accent-ink)]">{inicial}</span>
+        <div className="min-w-0">
+          <p className="overline">Estudiante</p>
+          <h2 className="display truncate text-2xl font-bold">{perfil.nombreCompleto || 'Perfil del estudiante'}</h2>
+          <p className="truncate text-sm t-muted">
+            {[perfil.numeroControl, perfil.grupo].filter(Boolean).join(' · ') || 'Se hereda en todos los membretes'}
+          </p>
+        </div>
+        {ok && <span role="status" className="insignia insignia-ok ml-auto shrink-0">Guardado</span>}
+      </div>
+      <div className="grid gap-3 p-4 md:grid-cols-2 md:p-6">
         <label className="grid gap-1 text-sm font-medium">Nombre completo
           <input className={campo} value={perfil.nombreCompleto} onChange={(e) => setPerfil({ ...perfil, nombreCompleto: e.target.value })} placeholder="Apellidos Nombres" autoComplete="name" />
         </label>
@@ -184,16 +198,19 @@ function PerfilPanel({ perfil, setPerfil }: { perfil: Alumno; setPerfil: (p: Alu
         </label>
         <label className="grid gap-1 text-sm font-medium">División (1)
           <select className={campo} value={perfil.division} onChange={(e) => setPerfil({ ...perfil, division: e.target.value })}>
-            {DIVISIONES_TESCI.map((d) => <option key={d} value={d} className="text-slate-900">{d}</option>)}
+            {DIVISIONES_TESCI.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
         </label>
         <label className="grid gap-1 text-sm font-medium">Grupo (2)
           <input className={campo} value={perfil.grupo} onChange={(e) => setPerfil({ ...perfil, grupo: e.target.value })} placeholder="1011V" />
         </label>
       </div>
-      <button onClick={guardar} className={`${btnPri} mt-4 flex items-center gap-2`}>
-        {ok ? <Icon name="check" size={16} /> : <Icon name="download" size={16} />} {ok ? 'Guardado' : 'Guardar local'}
-      </button>
+      <div className="flex flex-wrap items-center gap-2 border-t t-line p-4 md:px-6">
+        <button onClick={guardar} className={`${btnPri} flex items-center gap-2`}>
+          {ok ? <Icon name="check" size={16} /> : <Icon name="download" size={16} />} {ok ? 'Guardado' : 'Guardar local'}
+        </button>
+        <p className="text-xs t-muted">El equipo se agrega por evidencia.</p>
+      </div>
     </section>
   )
 }
@@ -296,53 +313,56 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
 
   return (
     <div className="grid gap-4">
-      <section className="card p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-lg font-bold tick">Evidencias {lista.length > 0 && <span className="text-sm font-normal t-muted">({lista.length})</span>}</h2>
-          <select value={filtro} onChange={(e) => setFiltro(e.target.value)} className={`${campo} ml-auto max-w-56`}>
-            <option value="" className="text-slate-900">Todas las materias</option>
-            {asignaturas.map((a) => <option key={a.id} value={a.id} className="text-slate-900">{a.nombre}</option>)}
-          </select>
-          <button onClick={empezarNueva} className={`${btnPri} flex items-center gap-2`}><Icon name="plus" size={16} /> Nueva</button>
-          <button onClick={() => setImportando(true)} className="touch-btn flex items-center gap-2 rounded-xl t-surface2 px-4 font-semibold" title="Agregar un PDF ya entregado, tal cual se entregó"><Icon name="upload" size={16} /> Importar PDF</button>
+      <section className="reveal card overflow-hidden">
+        <div className="border-b t-line p-4 md:p-6">
+          <p className="overline">Paso 2 — Formato FO-205P11000-14</p>
+          <h2 className="display mt-1 text-3xl font-bold">Evidencias{lista.length > 0 && <span className="text-lg font-normal t-muted"> · {lista.length}</span>}</h2>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <select value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label="Filtrar por materia" className={`${campo} max-w-56 flex-1`}>
+              <option value="">Todas las materias</option>
+              {asignaturas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+            </select>
+            <button onClick={empezarNueva} className={`${btnPri} flex items-center gap-2`}><Icon name="plus" size={16} /> Nueva</button>
+            <button onClick={() => setImportando(true)} className="touch-btn flex items-center gap-2 rounded-xl t-surface2 px-4 font-semibold" title="Agregar un PDF ya entregado, tal cual se entregó"><Icon name="upload" size={16} /> Importar PDF</button>
+          </div>
         </div>
+        <div className="grid gap-2 p-4 md:p-6">
         {asignaturas.length === 0 && (
-          <p className="mt-3 flex items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200">
+          <p className="aviso aviso-warn mt-3 flex items-center gap-2">
             <Icon name="alert" size={16} /> Primero crea una materia y sube su instrumentación en la pestaña Materias.
           </p>
         )}
-        {falloPdf && <p role="alert" className="mt-3 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{falloPdf}</p>}
-        <div className="mt-3 grid gap-2">
+        {falloPdf && <p role="alert" className="aviso aviso-bad mt-3">{falloPdf}</p>}
           {borradoresVisibles.length > 0 && (
-            <p className="px-1 text-xs font-bold uppercase tracking-wide t-muted">Borradores ({borradoresVisibles.length})</p>
+            <p className="overline">Borradores ({borradoresVisibles.length})</p>
           )}
           {borradoresVisibles.map((b) => {
             const ev = b.evidencia
             const mat = asignaturas.find((a) => a.id === b.asignaturaId)
             return (
-              <div key={`borrador-${b.id}`} className="rounded-xl border border-dashed border-amber-400/50 t-inset p-2 text-sm">
+              <div key={`borrador-${b.id}`} className="rounded-xl border border-dashed t-line t-inset p-3 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded bg-amber-400 px-2 py-0.5 text-[11px] font-bold uppercase text-slate-950">Borrador</span>
+                  <span className="insignia insignia-warn">Borrador</span>
                   <p className="min-w-0 flex-1 truncate font-semibold">{ev.nombreEvidencia || '(sin nombre)'}{ev.competenciaNo ? ` · Comp. ${ev.competenciaNo}` : ''}</p>
                 </div>
                 <p className="mt-1 text-xs t-muted">
                   {mat ? `${mat.nombre} · ` : ''}{ev.bloques.length} bloques · {haceCuanto(b.actualizadaEn)} · se elimina {expiraEn(b.actualizadaEn)}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <button onClick={() => continuarBorrador(b)} className="touch-btn flex items-center gap-1 rounded-lg bg-amber-400 px-3 font-bold text-slate-950"><Icon name="check" size={15} /> Continuar</button>
-                  <button onClick={() => descartarBorrador(b.id).then(cargarListaBorradores)} className="touch-btn rounded-lg bg-red-500/20 px-3 text-red-200">Descartar</button>
+                  <button onClick={() => continuarBorrador(b)} className="touch-btn flex items-center gap-1 rounded-lg bg-[var(--warn-bg)] px-3 font-bold text-[var(--warn-ink)]"><Icon name="check" size={15} /> Continuar</button>
+                  <button onClick={() => descartarBorrador(b.id).then(cargarListaBorradores)} className="touch-btn rounded-lg bg-[var(--bad-soft)] px-3">Descartar</button>
                 </div>
               </div>
             )
           })}
           {lista.map((e) => e.origen === 'pdf' ? (
-            <div key={e.id} className="flex items-center gap-2 rounded-xl border border-sky-400/25 t-inset p-2 text-sm t-ring">
-              <div className="min-w-0">
-                <p className="flex flex-wrap items-center gap-1 truncate font-semibold">
-                  <span className="rounded bg-sky-400 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-950">PDF</span>
-                  {e.nombreEvidencia || '(sin nombre)'} · Comp. {e.competenciaNo}
+            <div key={e.id} className="flex items-center gap-3 rounded-xl border t-line p-3 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2 font-semibold">
+                  <span className="insignia insignia-info">PDF</span>
+                  <span className="truncate">{e.nombreEvidencia || '(sin nombre)'} · Comp. {e.competenciaNo}</span>
                 </p>
-                <p className="text-xs t-muted">{e.asignatura}{e.pdfPaginas ? ` · ${e.pdfPaginas} págs.` : ''} · tal cual se entregó</p>
+                <p className="mt-0.5 text-xs t-muted">{e.asignatura}{e.pdfPaginas ? ` · ${e.pdfPaginas} págs.` : ''} · tal cual se entregó</p>
               </div>
               <button onClick={() => {
                 if (!e.pdfBase64) return
@@ -363,25 +383,25 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
                 } catch {
                   setFalloPdf('El PDF guardado está dañado y no se pudo descargar.')
                 }
-              }} className="touch-btn flex shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-3 font-bold text-slate-950" title="Descargar original">
+              }} className="touch-btn flex shrink-0 items-center gap-1 rounded-lg bg-[var(--ok-bg)] px-3 font-bold text-[var(--ok-ink)]" title="Descargar original">
                 <Icon name="download" size={15} /> PDF
               </button>
               <button onClick={() => setCorrigiendo(e)} className="touch-btn shrink-0 rounded-lg t-surface2 px-3" title="Corregir nombre o competencia">Corregir</button>
-              <button onClick={() => setEliminarId(e.id)} className="touch-btn shrink-0 rounded-lg bg-red-500/20 px-2 text-red-200" title="Eliminar evidencia" aria-label="Eliminar evidencia">
+              <button onClick={() => setEliminarId(e.id)} className="touch-btn shrink-0 rounded-lg bg-[var(--bad-soft)] px-2" title="Eliminar evidencia" aria-label="Eliminar evidencia">
                 <Icon name="trash" size={15} />
               </button>
             </div>
           ) : (
-            <div key={e.id} className="flex items-center gap-2 rounded-xl t-inset p-2 text-sm t-ring">
-              <div className="min-w-0">
+            <div key={e.id} className="flex items-center gap-3 rounded-xl border t-line p-3 text-sm">
+              <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{e.nombreEvidencia || '(sin nombre)'} · Comp. {e.competenciaNo}</p>
-                <p className="text-xs t-muted">{e.asignatura} · {e.bloques.length} bloques · [{e.indicadoresSeleccionados.join(',')}]</p>
+                <p className="mt-0.5 text-xs t-muted">{e.asignatura} · {e.bloques.length} bloques · [{e.indicadoresSeleccionados.join(',')}]</p>
               </div>
-              <button onClick={async () => { const inst = instrumentaciones.find((x) => x.id === asignaturas.find((y) => y.id === e.asignaturaId)?.instrumentacionId); const b = await generarEvidenciaPDF(e, mapaDeIndicadores(e, inst)); descargarPDF(b, `FO-205P11000-14_${e.nombreEvidencia.slice(0, 30)}`) }} className="touch-btn ml-auto flex shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-3 font-bold text-slate-950" title="Descargar PDF">
+              <button onClick={async () => { const inst = instrumentaciones.find((x) => x.id === asignaturas.find((y) => y.id === e.asignaturaId)?.instrumentacionId); const b = await generarEvidenciaPDF(e, mapaDeIndicadores(e, inst)); descargarPDF(b, `FO-205P11000-14_${e.nombreEvidencia.slice(0, 30)}`) }} className="touch-btn ml-auto flex shrink-0 items-center gap-1 rounded-lg bg-[var(--ok-bg)] px-3 font-bold text-[var(--ok-ink)]" title="Descargar PDF">
                 <Icon name="download" size={15} /> PDF
               </button>
               <button onClick={() => empezarEdicion(e)} className="touch-btn shrink-0 rounded-lg t-surface2 px-3" title="Editar">Editar</button>
-              <button onClick={() => setEliminarId(e.id)} className="touch-btn shrink-0 rounded-lg bg-red-500/20 px-2 text-red-200" title="Eliminar evidencia" aria-label="Eliminar evidencia">
+              <button onClick={() => setEliminarId(e.id)} className="touch-btn shrink-0 rounded-lg bg-[var(--bad-soft)] px-2" title="Eliminar evidencia" aria-label="Eliminar evidencia">
                 <Icon name="trash" size={15} />
               </button>
             </div>
@@ -479,9 +499,9 @@ function ImportarPdfModal({ perfil, asignaturas, instrumentaciones, inicialAsigI
   }
 
   return (
-    <div className="fixed inset-0 z-30 overflow-y-auto bg-black/70 p-4" onClick={onCancel} role="dialog" aria-modal="true" aria-label="Importar PDF entregado">
-      <div className="t-modal mx-auto max-w-xl rounded-2xl border t-line p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold tick">Importar PDF entregado</h3>
+    <div className="fixed inset-0 z-30 overflow-y-auto bg-black/70 px-0 pb-0 pt-[10dvh] md:p-4" onClick={onCancel} role="dialog" aria-modal="true" aria-label="Importar PDF entregado">
+      <div className="dialogo mx-auto max-w-xl p-4 md:p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="display text-2xl font-bold">Importar PDF entregado</h3>
         <p className="text-sm t-muted">Se guarda tal cual se entregó (no editable). Solo importa trabajos propios o con consentimiento.</p>
         <div className="mt-3 grid gap-2">
           <label className={`${btnSec} flex cursor-pointer items-center gap-2 text-sm`}>
@@ -493,7 +513,7 @@ function ImportarPdfModal({ perfil, asignaturas, instrumentaciones, inicialAsigI
           )}
           <label className="grid gap-1 text-sm font-medium">Materia
             <select value={asigId} onChange={(e) => setAsigId(e.target.value)} className={campo}>
-              {asignaturas.map((a) => <option key={a.id} value={a.id} className="text-slate-900">{a.nombre}</option>)}
+              {asignaturas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
             </select>
           </label>
           <label className="grid gap-1 text-sm font-medium">Nombre de la actividad
@@ -506,7 +526,7 @@ function ImportarPdfModal({ perfil, asignaturas, instrumentaciones, inicialAsigI
             </datalist>
           </label>
         </div>
-        {msg && <p role="status" className="mt-2 text-sm text-amber-200">{msg}</p>}
+        {msg && <p role="status" className="aviso aviso-warn mt-2">{msg}</p>}
         <div className="mt-3 flex flex-wrap gap-2">
           <button onClick={guardar} disabled={guardando} className={`${btnPri} flex items-center gap-2`}><Icon name="check" size={15} /> {guardando ? 'Guardando…' : 'Agregar'}</button>
           <button onClick={onCancel} className={btnSec}>Cancelar</button>
@@ -542,9 +562,9 @@ function CorregirImportadaModal({ evidencia, competencias, onCancel, onGuardado 
   }
 
   return (
-    <div className="fixed inset-0 z-30 overflow-y-auto bg-black/70 p-4" onClick={onCancel} role="dialog" aria-modal="true" aria-label="Corregir datos del PDF">
-      <div className="t-modal mx-auto max-w-md rounded-2xl border t-line p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold tick">Corregir datos</h3>
+    <div className="fixed inset-0 z-30 overflow-y-auto bg-black/70 px-0 pb-0 pt-[10dvh] md:p-4" onClick={onCancel} role="dialog" aria-modal="true" aria-label="Corregir datos del PDF">
+      <div className="dialogo mx-auto max-w-md p-4 md:p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="display text-2xl font-bold">Corregir datos</h3>
         <p className="text-sm t-muted">Solo nombre y competencia. El PDF no cambia.</p>
         <div className="mt-3 grid gap-2">
           <label className="grid gap-1 text-sm font-medium">Nombre de la actividad
@@ -557,7 +577,7 @@ function CorregirImportadaModal({ evidencia, competencias, onCancel, onGuardado 
             </datalist>
           </label>
         </div>
-        {msg && <p role="status" className="mt-2 text-sm text-amber-200">{msg}</p>}
+        {msg && <p role="status" className="aviso aviso-warn mt-2">{msg}</p>}
         <div className="mt-3 flex flex-wrap gap-2">
           <button onClick={guardar} className={`${btnPri} flex items-center gap-2`}><Icon name="check" size={15} /> Guardar</button>
           <button onClick={onCancel} className={btnSec}>Cancelar</button>

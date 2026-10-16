@@ -91,7 +91,7 @@ export default function VisorPdfMovil({ bytes, nombre }: { bytes: Uint8Array; no
         <p className="font-bold text-slate-700">No se pudo mostrar el documento en este dispositivo.</p>
         <p className="mt-1 break-words text-xs text-slate-500">{error}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button onClick={() => descargarPDF(bytes, nombre)} className="touch-btn flex items-center gap-1 rounded-xl bg-emerald-400 px-4 font-bold text-slate-950"><Icon name="download" size={15} /> Descargar</button>
+          <button onClick={() => descargarPDF(bytes, nombre)} className="touch-btn flex items-center gap-1 rounded-xl bg-[var(--ok-bg)] px-4 font-bold text-[var(--ok-ink)]"><Icon name="download" size={15} /> Descargar</button>
           <button onClick={() => { setError(null); setCarga((c) => c + 1) }} className="touch-btn flex items-center gap-1 rounded-xl bg-slate-100 px-4 font-semibold text-slate-700"><Icon name="rotate" size={15} /> Reintentar</button>
         </div>
       </div>

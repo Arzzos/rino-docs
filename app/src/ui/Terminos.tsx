@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { REPO_URL, SECCIONES_LEGALES, TERMINOS_FECHA } from '../domain/legal'
-import Icon from './icons'
+import Icon, { MarcaRD } from './icons'
 
 /** Documento completo de términos y aviso de privacidad. */
 export function ContenidoLegal() {
@@ -10,7 +10,7 @@ export function ContenidoLegal() {
       <nav aria-label="Índice del documento" className="rounded-xl t-inset p-3 text-[13px]">
         <ol className="grid gap-1">
           {SECCIONES_LEGALES.map((s) => (
-            <li key={s.id}><a href={`#legal-${s.id}`} className="hover:text-sky-300">{s.titulo}</a></li>
+            <li key={s.id}><a href={`#legal-${s.id}`} className="hover:text-[var(--accent)]">{s.titulo}</a></li>
           ))}
         </ol>
       </nav>
@@ -55,7 +55,7 @@ export function ContenidoLegal() {
       <section id="legal-propiedad" className="grid gap-1">
         <h4 className="font-bold">7. Propiedad intelectual y código abierto</h4>
         <p>El código fuente de RinoDocs es público y se distribuye bajo la Licencia MIT. Cualquier persona puede auditarlo, revisarlo o contribuir respetando los términos de dicha licencia y los créditos de autoría original.</p>
-        <p><a href={REPO_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-sky-300"><Icon name="github" size={14} /> Ver código fuente</a></p>
+        <p><a href={REPO_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-[var(--accent)]"><Icon name="github" size={14} /> Ver código fuente</a></p>
       </section>
 
       <section id="legal-cambios" className="grid gap-1">
@@ -66,7 +66,7 @@ export function ContenidoLegal() {
       <section id="legal-contacto" className="grid gap-1">
         <h4 className="font-bold">9. Contacto</h4>
         <p>Para dudas, reportes o propuestas puedes abrir un issue en el repositorio público del proyecto.</p>
-        <p><a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-sky-300"><Icon name="github" size={14} /> Reportar o proponer</a></p>
+        <p><a href={`${REPO_URL}/issues`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-[var(--accent)]"><Icon name="github" size={14} /> Reportar o proponer</a></p>
       </section>
     </article>
   )
@@ -87,22 +87,20 @@ export default function ModalLegal({ modo, onAceptar, onCerrar }: {
   }, [bloqueo, onCerrar])
   return (
     <div
-      className="fixed inset-0 z-40 overflow-y-auto bg-black/70 p-4"
+      className="fixed inset-0 z-40 overflow-y-auto bg-black/70 px-0 pb-0 pt-[10dvh] md:p-4"
       onClick={bloqueo ? undefined : onCerrar}
       role="dialog" aria-modal="true" aria-label="Términos de uso y aviso de privacidad"
     >
-      <div className="t-modal mx-auto max-w-2xl rounded-2xl border t-line p-4 shadow-2xl md:p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="dialogo mx-auto max-w-2xl p-4 md:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[#a52c3c] to-[#5e1620] text-[#faf5ec]">
-            <Icon name="shield" size={19} />
-          </span>
+          <MarcaRD size={40} />
           <div>
-            <h3 className="text-lg font-bold tick">Términos de uso y aviso de privacidad</h3>
+            <h3 className="display text-2xl font-bold">Términos de uso y aviso de privacidad</h3>
             <p className="text-xs t-muted">RinoDocs · proyecto comunitario, sin afiliación institucional</p>
           </div>
         </div>
         {bloqueo && (
-          <p className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/5 p-2 text-[13px] text-amber-200">
+          <p className="aviso aviso-warn mt-3 text-[13px]">
             Para continuar necesitas aceptar los términos. Sin aceptación no es posible usar la aplicación.
           </p>
         )}
@@ -111,7 +109,7 @@ export default function ModalLegal({ modo, onAceptar, onCerrar }: {
         </div>
         <div className="sticky bottom-0 mt-3 flex flex-wrap gap-2 bg-transparent">
           {bloqueo ? (
-            <button onClick={onAceptar} className="touch-btn flex items-center gap-2 rounded-xl bg-emerald-400 px-5 font-bold text-slate-950">
+            <button onClick={onAceptar} className="touch-btn flex items-center gap-2 rounded-xl bg-[var(--ok-bg)] px-5 font-bold text-[var(--ok-ink)]">
               <Icon name="check" size={15} /> Acepto los términos
             </button>
           ) : (

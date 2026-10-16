@@ -60,6 +60,23 @@ const MAPA = {
 
 export type IconName = keyof typeof MAPA | 'github' | 'insta'
 
+/** Monograma Rino minimalista: R de un solo trazo continuo (sin cruces ni
+ *  empalmes) + corte de cuerno flotante con aire. Una sola tinta del contexto.
+ *  A 16px se lee R. */
+export function MarcaRD({ size = 36, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 32 32" role="img" aria-label="Rino Docs"
+      fill="none" stroke="currentColor" strokeWidth={3.4}
+      strokeLinecap="round" strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M21.5 29L16 18H10V8h6a5 5 0 0 1 0 10H10V29" />
+      <path d="M20.5 4.2L25.5 2" />
+    </svg>
+  )
+}
+
 export default function Icon({ name, size = 18, className = '' }: { name: IconName; size?: number; className?: string }) {
   if (name === 'github') return <GithubPropio width={size} height={size} className={`shrink-0 ${className}`} />
   if (name === 'insta') return <InstaPropio width={size} height={size} className={`shrink-0 ${className}`} />

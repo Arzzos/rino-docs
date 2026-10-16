@@ -140,8 +140,42 @@ export interface PortafolioSeccion {
   grupo: GrupoSeccion
 }
 
-/** Orden fijo de grupos; dentro de cada grupo el usuario ordena libremente. */
+/** Orden institucional por defecto; la portada siempre va primera y fija.
+ *  Índice, instrumentación, diagnóstica y contenido se reordenan como
+ *  bloques libres (hay docentes que piden el índice o la instrumentación
+ *  después de las actividades). */
 export const ORDEN_GRUPOS: GrupoSeccion[] = ['portada', 'indice', 'instrumentacion', 'diagnostica', 'contenido']
+
+export type PresetOrden = 'institucional' | 'indice-final' | 'instrumentacion-final'
+
+/** Mueve una sección d posiciones; la portada nunca se mueve ni cede el puesto 0. */
+export function moverSeccion(secciones: PortafolioSeccion[], id: string, d: number): PortafolioSeccion[] {
+  const i = secciones.findIndex((x) => x.id === id)
+  const j = i + d
+  if (i < 0 || j < 0 || j >= secciones.length) return secciones
+  if (secciones[i].tipo === 'portada' || secciones[j].tipo === 'portada') return secciones
+  if (j === 0) return secciones // el puesto 0 es de la portada
+  const a = [...secciones]
+  ;[a[i], a[j]] = [a[j], a[i]]
+  return a
+}
+
+/** Reubica un bloque completo (índice o instrumentación) conservando el resto. */
+export function aplicarPresetOrden(secciones: PortafolioSeccion[], preset: PresetOrden): PortafolioSeccion[] {
+  const portadas = secciones.filter((s) => s.tipo === 'portada')
+  const resto = secciones.filter((s) => s.tipo !== 'portada')
+  if (preset === 'institucional') {
+    const peso = (s: PortafolioSeccion) => ORDEN_GRUPOS.indexOf(s.grupo ?? grupoDe(s.tipo))
+    return [...portadas, ...resto.map((s, i) => ({ s, i })).sort((a, b) => peso(a.s) - peso(b.s) || a.i - b.i).map(({ s }) => s)]
+  }
+  const mueveAlFinal = (tipos: PortafolioSeccion['tipo'][]) => {
+    const bloque = resto.filter((s) => tipos.includes(s.tipo))
+    const base = resto.filter((s) => !tipos.includes(s.tipo))
+    return [...portadas, ...base, ...bloque]
+  }
+  if (preset === 'indice-final') return mueveAlFinal(['indice'])
+  return mueveAlFinal(['instrumentacion'])
+}
 
 export function grupoDe(tipo: PortafolioSeccion['tipo']): GrupoSeccion {
   if (tipo === 'portada' || tipo === 'indice' || tipo === 'instrumentacion' || tipo === 'diagnostica') return tipo
