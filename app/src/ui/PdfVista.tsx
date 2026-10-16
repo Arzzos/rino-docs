@@ -54,7 +54,9 @@ export default function VisorPdfMovil({ bytes, nombre }: { bytes: Uint8Array; no
         if (bytes.length === 0) throw new Error('Documento vacío')
         const pdfjs = await cargarPdfJs()
         if (!vivo) return
-        obrero = crearObreroPdf()
+        const ob = await crearObreroPdf()
+        if (!vivo) { ob.terminate(); return }
+        obrero = ob
         pdfjs.GlobalWorkerOptions.workerSrc = new URL(
           'pdfjs-dist/build/pdf.worker.min.mjs',
           import.meta.url,
