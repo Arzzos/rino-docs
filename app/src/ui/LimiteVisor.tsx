@@ -15,7 +15,7 @@ export default function LimiteVisor({ bytes, nombre, children }: {
       nombre={`visor:${nombre}`}
       compacto
       accion={(
-        <button onClick={() => descargarPDF(bytes, nombre)} className="touch-btn flex items-center gap-1 rounded-xl bg-emerald-400 px-4 font-bold text-slate-950">
+        <button onClick={() => descargarPDF(bytes, nombre)} className="touch-btn flex items-center gap-1 rounded-xl bg-[var(--ok-bg)] px-4 font-bold text-[var(--ok-ink)]">
           <Icon name="download" size={15} /> Descargar
         </button>
       )}

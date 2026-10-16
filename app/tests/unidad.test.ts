@@ -927,3 +927,76 @@ describe('visor pdf adaptativo', () => {
     expect(debeUsarVisorPropio(true, false, false)).toBe(false)
   })
 })
+
+describe('orden libre del portafolio (portada fija)', () => {
+  async function helpers() {
+    return import('../src/domain/types')
+  }
+  const secs = () => [
+    { id: 'p', tipo: 'portada', titulo: 'Portada', grupo: 'portada' },
+    { id: 'i', tipo: 'indice', titulo: 'Índice', grupo: 'indice' },
+    { id: 'n', tipo: 'instrumentacion', titulo: 'Instrumentación', grupo: 'instrumentacion' },
+    { id: 'e', tipo: 'evidencia', titulo: 'Evidencia', refId: 'imp1', grupo: 'contenido' },
+  ] as never
+
+  it('la portada no se mueve ni cede el puesto 0', async () => {
+    const { moverSeccion } = await helpers()
+    expect(moverSeccion(secs(), 'p', 1)[0].id).toBe('p')
+    expect(moverSeccion(secs(), 'i', -1)[0].id).toBe('p')
+    expect(moverSeccion(secs(), 'n', -2)[0].id).toBe('p')
+  })
+  it('el resto se reordena libre entre bloques', async () => {
+    const { moverSeccion } = await helpers()
+    const r = moverSeccion(secs(), 'n', -1)
+    expect(r.map((s) => s.id)).toEqual(['p', 'n', 'i', 'e'])
+  })
+  it('presets: índice o instrumentación al final', async () => {
+    const { aplicarPresetOrden } = await helpers()
+    expect(aplicarPresetOrden(secs(), 'indice-final').map((s) => s.id)).toEqual(['p', 'n', 'e', 'i'])
+    expect(aplicarPresetOrden(secs(), 'instrumentacion-final').map((s) => s.id)).toEqual(['p', 'i', 'e', 'n'])
+    expect(aplicarPresetOrden(secs(), 'institucional').map((s) => s.id)).toEqual(['p', 'i', 'n', 'e'])
+  })
+  it('el PDF inserta el índice donde va (al final)', async () => {
+    const { PDFDocument } = await import('pdf-lib')
+    const src = await PDFDocument.create()
+    src.addPage([300, 400])
+    const pdfBase64 = Buffer.from(await src.save()).toString('base64')
+    const { ensamblarPortafolio } = await import('../src/infrastructure/portfolioPdf')
+    const ev = { ...base, id: 'imp1', origen: 'pdf' as const, nombreEvidencia: 'Reporte previo', competenciaNo: '2', pdfBase64, pdfPaginas: 1, bloques: [], indicadoresSeleccionados: [] }
+    const out = await ensamblarPortafolio(
+      {
+        id: 'p1', asignaturaId: 'a1', titulo: 'Portafolio', creadaEn: 1,
+        secciones: [
+          { id: 's1', tipo: 'portada', titulo: 'Portada', grupo: 'portada' },
+          { id: 's3', tipo: 'evidencia', titulo: 'Reporte previo', refId: 'imp1', grupo: 'contenido' },
+          { id: 's2', tipo: 'indice', titulo: 'Índice', grupo: 'indice' },
+        ],
+      },
+      [ev], null, [],
+      { asignatura: 'Cálculo', division: 'Div', alumno: 'A 1', docente: 'Doc', grupo: 'G', periodo: 'P' },
+    )
+    const doc = await PDFDocument.load(out)
+    // portada + 1 importada + 1 de índice al final
+    expect(doc.getPageCount()).toBe(3)
+  })
+  it('sin sección de índice no se inserta página de índice', async () => {
+    const { PDFDocument } = await import('pdf-lib')
+    const src = await PDFDocument.create()
+    src.addPage([300, 400])
+    const pdfBase64 = Buffer.from(await src.save()).toString('base64')
+    const { ensamblarPortafolio } = await import('../src/infrastructure/portfolioPdf')
+    const ev = { ...base, id: 'imp1', origen: 'pdf' as const, nombreEvidencia: 'Reporte previo', competenciaNo: '2', pdfBase64, pdfPaginas: 1, bloques: [], indicadoresSeleccionados: [] }
+    const out = await ensamblarPortafolio(
+      {
+        id: 'p1', asignaturaId: 'a1', titulo: 'Portafolio', creadaEn: 1,
+        secciones: [
+          { id: 's1', tipo: 'portada', titulo: 'Portada', grupo: 'portada' },
+          { id: 's3', tipo: 'evidencia', titulo: 'Reporte previo', refId: 'imp1', grupo: 'contenido' },
+        ],
+      },
+      [ev], null, [],
+      { asignatura: 'Cálculo', division: 'Div', alumno: 'A 1', docente: 'Doc', grupo: 'G', periodo: 'P' },
+    )
+    expect((await PDFDocument.load(out)).getPageCount()).toBe(2)
+  })
+})

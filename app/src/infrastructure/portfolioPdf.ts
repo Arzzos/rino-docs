@@ -1,6 +1,6 @@
 // Ensamblador del portafolio institucional.
-// Orden de grupos fijo; dentro de cada grupo manda el orden del usuario.
-// Índice con números de página reales, enlaces y esquema del documento.
+// Respeta el orden de secciones del usuario; solo la portada va primera.
+// El índice se inserta donde el usuario lo colocó, con páginas reales y enlaces.
 
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, rgb } from 'pdf-lib'
 import type { Diagnostica, Evidencia, Instrumentacion, Portafolio } from '../domain/types'
@@ -33,7 +33,8 @@ export async function ensamblarPortafolio(
 
   const secciones = [...portafolio.secciones]
     .map((s) => ({ ...s, grupo: s.grupo ?? grupoDe(s.tipo) }))
-  // El orden de salida es fijo por grupos; el orden relativo dentro del grupo se conserva.
+  // La portada siempre abre; el resto manda en el orden del usuario.
+  secciones.sort((a, b) => (a.tipo === 'portada' ? -1 : 0) - (b.tipo === 'portada' ? -1 : 0))
 
   // 1. Portada general
   onProgreso?.('Portada general…')
@@ -74,13 +75,11 @@ export async function ensamblarPortafolio(
 
   const numPag = () => doc.getPageCount()
 
-  // 2. Cuerpo por grupos
-  const porGrupo = (g: string) => secciones.filter((s) => (s.grupo ?? grupoDe(s.tipo)) === g)
-
-  // 2a. Instrumentación (PDF copiado o DOCX convertido).
-  for (const s of porGrupo('instrumentacion')) {
-    void s
-    if (!instrumentacion) continue
+  // 2. Cuerpo en el orden del usuario (se salta portada e índice).
+  const posIndice = secciones.findIndex((s) => s.tipo === 'indice')
+  let pagsAntesIndice = 0
+  const renderInstrumentacion = async () => {
+    if (!instrumentacion) return
     onProgreso?.('Instrumentación original íntegra…')
     const inicio = numPag() + 1
     if (instrumentacion.originalMime.includes('pdf')) {
@@ -96,11 +95,9 @@ export async function ensamblarPortafolio(
     }
     entradas.push({ titulo: 'Instrumentación didáctica para la formación y desarrollo de competencias profesionales', pagina: inicio, nivel: 0 })
   }
-
-  // 2b. Evaluaciones diagnósticas
-  const diags = porGrupo('diagnostica').map((s) => diagMap.get(s.refId ?? '')).filter((d): d is Diagnostica => !!d)
-  const diagsTodas = diags.length ? diags : []
-  for (const d of diagsTodas) {
+  const renderDiagnostica = async (s: (typeof secciones)[number]) => {
+    const d = diagMap.get(s.refId ?? '')
+    if (!d) return
     onProgreso?.(`Diagnóstica: ${d.nombreHoja}…`)
     const f = nuevoFlujo(t)
     const inicio = numPag()
@@ -110,7 +107,7 @@ export async function ensamblarPortafolio(
     const { bytes, esPng } = dataUrlToBytes(d.imagenDataUrl)
     let img
     try { img = esPng ? await doc.embedPng(bytes) : await doc.embedJpg(bytes) }
-    catch { try { img = esPng ? await doc.embedJpg(bytes) : await doc.embedPng(bytes) } catch { continue } }
+    catch { try { img = esPng ? await doc.embedJpg(bytes) : await doc.embedPng(bytes) } catch { return } }
     const ratio = img.height / img.width
     let w = CONTENT_W
     let h = w * ratio
@@ -120,12 +117,10 @@ export async function ensamblarPortafolio(
     f.y -= h + 8
     entradas.push({ titulo: d.nombreHoja || 'Evaluación diagnóstica', pagina: inicio, nivel: 0 })
   }
-
-  // 2c. Contenido: portadas de competencia + evidencias (orden del usuario)
-  for (const s of porGrupo('contenido')) {
+  const renderContenido = async (s: (typeof secciones)[number]) => {
     if (s.tipo === 'portada-competencia' && instrumentacion) {
       const comp = instrumentacion.competencias.find((c) => c.numero === s.refId)
-      if (!comp) continue
+      if (!comp) return
       onProgreso?.(`Portada competencia ${comp.numero}…`)
       const f = nuevoFlujo(t)
       const inicio = numPag()
@@ -143,7 +138,7 @@ export async function ensamblarPortafolio(
       entradas.push({ titulo: `Portada Competencia específica ${comp.numero}.`, pagina: inicio, nivel: 0 })
     } else if (s.tipo === 'evidencia') {
       const ev = evMap.get(s.refId ?? '')
-      if (!ev) continue
+      if (!ev) return
       onProgreso?.(`Evidencia: ${ev.nombreEvidencia.slice(0, 40)}…`)
       const inicio = numPag() + 1
       // PDF importado: se copia íntegro; editor propio: se genera el FO-14.
@@ -155,6 +150,14 @@ export async function ensamblarPortafolio(
       pgs.forEach((p) => doc.addPage(p))
       entradas.push({ titulo: ev.nombreEvidencia || '(sin nombre)', pagina: inicio, nivel: 1, comp: ev.competenciaNo } as EntradaIndice & { comp: string })
     }
+  }
+  for (let k = 0; k < secciones.length; k++) {
+    const s = secciones[k]
+    if (s.tipo === 'portada') continue
+    if (s.tipo === 'indice') { pagsAntesIndice = numPag(); continue }
+    if (s.tipo === 'instrumentacion') await renderInstrumentacion()
+    else if (s.tipo === 'diagnostica') await renderDiagnostica(s)
+    else await renderContenido(s)
   }
 
   // 3. Índice tras la portada
@@ -180,26 +183,32 @@ export async function ensamblarPortafolio(
     }
   }
 
-  // Calcula las páginas del índice.
+  // 3. Índice donde el usuario lo colocó (si lo quitó, no se inserta).
+  const hayIndice = posIndice >= 0
   const size = 10
   const porPagina = 34
   const nIdx = Math.max(1, Math.ceil((lineasIndice.length + 2) / porPagina))
-  // Inserta las páginas del índice tras la portada.
+  // Inserta las páginas del índice en su posición del flujo.
+  const baseInsercion = hayIndice ? pagsAntesIndice : -1
   const idxPages: { page: ReturnType<PDFDocument['getPage']>; y: number }[] = []
-  for (let k = 0; k < nIdx; k++) {
-    const pg = doc.insertPage(1 + k, [CARTA_W, CARTA_H])
-    idxPages.push({ page: pg, y: CARTA_H - 66 - 58 - 4 })
+  if (hayIndice) {
+    for (let k = 0; k < nIdx; k++) {
+      const pg = doc.insertPage(baseInsercion + k, [CARTA_W, CARTA_H])
+      idxPages.push({ page: pg, y: CARTA_H - 66 - 58 - 4 })
+    }
   }
   // Membretes en las páginas del índice.
   for (const { page } of idxPages) {
     dibujarMembretes(t, page)
   }
-  // El cuerpo se desplazó +nIdx.
-  for (const e of entradas) e.pagina += nIdx
-  for (const ln of lineasIndice) ln.pagina += nIdx
+  // Solo lo que quedó después del índice se desplazó +nIdx.
+  if (hayIndice) {
+    for (const e of entradas) if (e.pagina > baseInsercion) e.pagina += nIdx
+    for (const ln of lineasIndice) if (ln.pagina > baseInsercion) ln.pagina += nIdx
+  }
 
   // Dibuja el índice y sus enlaces.
-  {
+  if (hayIndice) {
     const pg0 = idxPages[0]
     pg0.page.drawText('CONTENIDO', { x: M_L, y: pg0.y - 12, size: 14, font: t.helvB })
     let yy = pg0.y - 34

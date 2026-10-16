@@ -61,18 +61,18 @@ export default class ErrorBoundary extends Component<Props, Estado> {
           <div className="mt-3 flex flex-wrap gap-2">
             {this.props.accion}
             <button onClick={() => this.setState({ error: null })} className="touch-btn flex items-center gap-1 rounded-xl bg-slate-100 px-4 font-semibold text-slate-700"><Icon name="rotate" size={15} /> Reintentar</button>
-            <button onClick={this.copiar} className="touch-btn flex items-center gap-1 rounded-xl bg-slate-100 px-4 text-slate-700"><Icon name="copy" size={15} /> Copiar detalles</button>
+            <button onClick={this.copiar} className="touch-btn flex items-center gap-1 rounded-xl t-surface2 px-4"><Icon name="copy" size={15} /> Copiar detalles</button>
           </div>
         </div>
       )
     }
     return (
-      <div className="mx-auto max-w-xl rounded-2xl border border-red-400/30 bg-red-500/10 p-6 text-center" role="alert">
-        <p className="text-lg font-bold text-red-200">Algo falló al mostrar esta vista</p>
+      <div className="aviso aviso-bad mx-auto max-w-xl p-6 text-center" role="alert">
+        <p className="text-lg font-bold">Algo falló al mostrar esta vista</p>
         <p className="mt-2 text-sm t-muted">Tus datos están a salvo. Intenta de nuevo.</p>
         <p className="mx-auto mt-2 max-w-md break-words text-xs opacity-70 t-muted">{detalle}</p>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
-          <button className="touch-btn flex items-center gap-1 rounded-xl bg-emerald-400 px-5 font-bold text-slate-950" onClick={() => this.setState({ error: null })}><Icon name="rotate" size={15} /> Reintentar</button>
+          <button className="touch-btn flex items-center gap-1 rounded-xl bg-[var(--ok-bg)] px-5 font-bold text-[var(--ok-ink)]" onClick={() => this.setState({ error: null })}><Icon name="rotate" size={15} /> Reintentar</button>
           <button className="touch-btn flex items-center gap-1 rounded-xl t-surface2 px-5 font-semibold" onClick={this.copiar}><Icon name="copy" size={15} /> Copiar detalles</button>
           <button className="touch-btn rounded-xl t-surface2 px-5" onClick={() => window.location.reload()}>Recargar app</button>
         </div>

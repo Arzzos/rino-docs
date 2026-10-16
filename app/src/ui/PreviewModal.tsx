@@ -31,7 +31,7 @@ export default function PreviewModal({ bytes, nombre, onClose }: { bytes: Uint8A
             <Icon name="eye" size={15} /> {propio ? 'Sistema' : 'App'}
           </button>
         )}
-        <button onClick={() => descargarPDF(bytes, nombre)} className="touch-btn ml-auto flex items-center gap-1 rounded-xl bg-emerald-400 px-4 font-bold text-slate-950"><Icon name="download" size={15} /> Descargar</button>
+        <button onClick={() => descargarPDF(bytes, nombre)} className="touch-btn ml-auto flex items-center gap-1 rounded-xl bg-[var(--ok-bg)] px-4 font-bold text-[var(--ok-ink)]"><Icon name="download" size={15} /> Descargar</button>
         <button ref={refCerrar} onClick={onClose} className="touch-btn flex items-center gap-1 rounded-xl t-surface2 px-4"><Icon name="x" size={15} /> Cerrar</button>
       </div>
       <div className="mx-auto w-full max-w-5xl flex-1 overflow-hidden rounded-xl bg-white" onClick={(e) => e.stopPropagation()}>
