@@ -1,7 +1,7 @@
 {
   "name": "app",
   "private": true,
-  "version": "0.1.0-alpha",
+  "version": "0.1.0-beta",
   "license": "MIT",
   "author": "Rasiel Aztontli Espinal González (https://arzzos.com)",
   "homepage": "https://rinodocs.arzzos.com",

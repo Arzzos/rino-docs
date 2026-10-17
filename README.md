@@ -1,6 +1,6 @@
 # Rino Docs — TESCI Portfolios and Evidence (Offline-First)
 
-> Status: **Alpha (`0.1.0-alpha`)**. Core flow works; several details still being polished.
+> Status: **Beta (`0.1.0-beta`)**. Core flow works; several details still being polished.
 > Leer en español: [`README.es.md`](README.es.md).
 
 Client-only PWA (React 19 + TS + Vite + Tailwind 4) to generate the **FO-205P11000-14**

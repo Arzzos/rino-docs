@@ -8,6 +8,8 @@
   Content-Type: application/manifest+json
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+/og.png
+  Cache-Control: public, max-age=86400
 /membretes/*
   Cache-Control: public, max-age=2592000, immutable
 /icons/*

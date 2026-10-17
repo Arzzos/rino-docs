@@ -1,6 +1,6 @@
 # Rino Docs — Portafolios y evidencias TESCI (Offline-First)
 
-> Estado: **Alpha (`0.1.0-alpha`)**. El flujo principal funciona; hay detalles por pulir.
+> Estado: **Beta (`0.1.0-beta`)**. El flujo principal funciona; hay detalles por pulir.
 > Read in English: [`README.md`](README.md).
 
 PWA 100% cliente (React 19 + TS + Vite + Tailwind 4) para generar el formato

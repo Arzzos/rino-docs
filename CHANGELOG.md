@@ -4,7 +4,10 @@ Formato: Keep a Changelog + SemVer. Entradas bilingües (ES/EN) por release. / F
 
 ## [Unreleased] / [Sin publicar]
 
+## [0.1.0-beta] — 2026-10-17
+
 ### Añadido / Added
+- SEO e imagen social: `robots.txt`, `sitemap.xml`, tarjeta OpenGraph 1200×630 (`og.png`) y datos estructurados `SoftwareApplication`; `twitter:card` pasa a `summary_large_image`. / SEO and social card: robots.txt, sitemap.xml, 1200x630 OpenGraph image and SoftwareApplication structured data; twitter:card moves to summary_large_image.
 - Términos de uso y aviso de privacidad con aceptación obligatoria al primer arranque (funcionamiento local, no afiliación al TESCI, código MIT). / Terms of use and privacy notice with mandatory first-run acceptance.
 - Importar PDF entregado: agrega a evidencias un PDF ya entregado tal cual (no editable), con nombre, competencia, vista previa y copia íntegra al portafolio. / Import an already-submitted PDF as read-only evidence, copied as-is into the portfolio.
 
@@ -14,8 +17,11 @@ Formato: Keep a Changelog + SemVer. Entradas bilingües (ES/EN) por release. / F
 - Parser de instrumentación robusto (DOCX por tablas, PDF por columnas): temas sin encabezados ni columnas vecinas, indicadores multilínea completos sin `|` ni porcentaje (solo letra + descripción), descripciones sin cortes por palabras clave; verificado en 7 documentos. / Robust instrumentation parsing (table-driven DOCX, column-aware PDF): clean topics, complete multiline indicators without `|` or percentages, full descriptions; verified on 7 documents.
 - Editor de indicadores de alcance: ya no pierde el foco al teclear ni reaparece el `|` al borrarlo (edición en texto libre con parseo diferido). / Scope-indicator editor no longer loses focus while typing and deleted `|` no longer reappears.
 - Portafolio en pantallas angostas: las filas de secciones ya no desbordan lateralmente (título truncado + acciones en segunda línea), la navegación inferior permanece fija. / Portfolio on narrow screens no longer overflows horizontally; bottom navigation stays fixed.
+- Metas sociales unificadas: la descripción, OpenGraph y Twitter decían "alpha" mientras la interfaz decía "beta". / Social metadata unified: description, OpenGraph and Twitter said "alpha" while the UI said "beta".
 
 ### Cambiado / Changed
+- Identidad visual tinta y papel (serif académica) y armador libre del portafolio: portada fija y bloques de índice/instrumentación reordenables con arrastrar, subir/bajar y presets. / Ink-and-paper visual identity and free portfolio assembler: fixed cover plus reorderable index/instrumentation blocks.
+- Estado del proyecto: alpha → beta (`0.1.0-beta`) en código, documentación y términos. Los términos suben a `2026-10-17-v2`, así que piden una nueva aceptación. / Project status alpha → beta across code, docs and terms. Terms bump to `2026-10-17-v2`, requiring re-acceptance.
 - Despliegue por dashboard de Cloudflare Pages (integración Git) como vía principal; `ci.yml` queda solo con `check` (sin job `deploy` ni secrets). / Dashboard deploys as the primary path; `ci.yml` now checks only.
 
 ## [0.1.0-alpha] — 2026-10-13

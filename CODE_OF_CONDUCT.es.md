@@ -6,7 +6,7 @@
 
 Nos comprometemos a que participar en Rino Docs sea una experiencia libre de acoso para
 todas las personas, sin importar edad, origen, identidad o nivel. Es un proyecto educativo
-en etapa Alpha; paciencia con quienes empiezan.
+en etapa Beta; paciencia con quienes empiezan.
 
 ## Conducta esperada
 

@@ -2,10 +2,10 @@
 // Al cambiar el texto, subir VERSION para pedir aceptación de nuevo.
 
 /** Versión vigente. Formato fecha + revisión. */
-export const TERMINOS_VERSION = '2026-10-14-v1'
+export const TERMINOS_VERSION = '2026-10-17-v2'
 
 /** Fecha legible de la última actualización. */
-export const TERMINOS_FECHA = '14 de octubre de 2026'
+export const TERMINOS_FECHA = '17 de octubre de 2026'
 
 /** Clave de LocalStorage donde se guarda la versión aceptada. */
 export const TERMINOS_CLAVE = 'rino.terminos.v1'

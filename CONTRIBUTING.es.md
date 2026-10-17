@@ -1,6 +1,6 @@
 # Cómo contribuir a Rino Docs
 
-> Proyecto en Alpha (`0.1.0-alpha`). Gracias por ayudar a pulirlo.
+> Proyecto en Beta (`0.1.0-beta`). Gracias por ayudar a pulirlo.
 > In English: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## 1. Regla de ramas (obligatoria)

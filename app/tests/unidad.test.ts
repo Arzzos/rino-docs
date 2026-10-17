@@ -302,6 +302,60 @@ describe('términos y privacidad (gate de aceptación)', () => {
   })
 })
 
+describe('SEO e indexación', () => {
+  const html = readFileSync(join(RAIZ, 'app', 'index.html'), 'utf8')
+  const publico = (n: string) => join(RAIZ, 'app', 'public', n)
+
+  it('robots.txt no es HTML y declara el sitemap', () => {
+    const txt = readFileSync(publico('robots.txt'), 'utf8')
+    expect(txt).not.toMatch(/<html/i)
+    expect(txt).toMatch(/^User-agent:\s*\*$/m)
+    expect(txt).toMatch(/^Allow:\s*\/$/m)
+    expect(txt).toMatch(/^Sitemap: https:\/\/rinodocs\.arzzos\.com\/sitemap\.xml$/m)
+  })
+
+  it('sitemap.xml es XML con la URL canónica', () => {
+    const xml = readFileSync(publico('sitemap.xml'), 'utf8')
+    expect(xml).not.toMatch(/<html/i)
+    expect(xml).toContain('http://www.sitemaps.org/schemas/sitemap/0.9')
+    expect(xml).toContain('<loc>https://rinodocs.arzzos.com/</loc>')
+    expect(xml.match(/<url>/g)).toHaveLength(1)
+  })
+
+  it('og.png es una tarjeta de 1200×630', () => {
+    const png = readFileSync(publico('og.png'))
+    expect(png.subarray(1, 4).toString('ascii')).toBe('PNG')
+    expect(png.readUInt32BE(16)).toBe(1200)
+    expect(png.readUInt32BE(20)).toBe(630)
+  })
+
+  it('index.html declara OpenGraph y Twitter completos', () => {
+    expect(html).toContain('<meta name="robots" content="index, follow, max-image-preview:large" />')
+    expect(html).toContain('<link rel="canonical" href="https://rinodocs.arzzos.com/" />')
+    expect(html).toContain('<meta property="og:image" content="https://rinodocs.arzzos.com/og.png" />')
+    expect(html).toContain('<meta property="og:image:width" content="1200" />')
+    expect(html).toContain('<meta property="og:image:height" content="630" />')
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />')
+  })
+
+  it('los datos estructurados son JSON válido y describen la app', () => {
+    const m = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)
+    expect(m).not.toBeNull()
+    const datos = JSON.parse(m?.[1] ?? '')
+    expect(datos['@type']).toBe('SoftwareApplication')
+    expect(datos.applicationCategory).toBe('EducationalApplication')
+    expect(datos.isAccessibleForFree).toBe(true)
+    expect(datos.offers.price).toBe('0')
+  })
+
+  it('la etiqueta alpha ya no sobrevive en la superficie pública', () => {
+    expect(html).not.toMatch(/\balpha\b/i)
+    expect(JSON.parse(readFileSync(join(RAIZ, 'app', 'package.json'), 'utf8')).version).toBe('0.1.0-beta')
+    const docs = ['README.md', 'README.es.md', 'ROADMAP.md', 'ROADMAP.es.md', 'SECURITY.md', 'SECURITY.es.md', 'CONTRIBUTING.md', 'CONTRIBUTING.es.md', 'CODE_OF_CONDUCT.md', 'CODE_OF_CONDUCT.es.md', 'app/src/ui/Terminos.tsx']
+    for (const f of docs) expect(readFileSync(join(RAIZ, f), 'utf8'), f).not.toMatch(/\balpha\b/i)
+  })
+})
+
 describe('evidencias PDF importadas (tal cual se entregaron)', () => {
   it('validación pide nombre, competencia y archivo (sin bloques)', () => {
     const imp = { ...base, origen: 'pdf' as const, nombreEvidencia: 'Reporte', competenciaNo: '2', bloques: [], indicadoresSeleccionados: [], pdfBase64: 'eA==' }
