@@ -60,7 +60,7 @@ export function ContenidoLegal() {
 
       <section id="legal-cambios" className="grid gap-1">
         <h4 className="font-bold">8. Modificaciones de la aplicación y los términos</h4>
-        <p>RinoDocs está en fase Alpha y en constante evolución. El desarrollador se reserva el derecho de actualizar, modificar o suspender características de la aplicación, así como estos términos, para mejorar la experiencia sin previo aviso. Los cambios relevantes se anuncian en el historial de versiones y pueden pedirte aceptar de nuevo.</p>
+        <p>RinoDocs está en fase Beta y en constante evolución. El desarrollador se reserva el derecho de actualizar, modificar o suspender características de la aplicación, así como estos términos, para mejorar la experiencia sin previo aviso. Los cambios relevantes se anuncian en el historial de versiones y pueden pedirte aceptar de nuevo.</p>
       </section>
 
       <section id="legal-contacto" className="grid gap-1">

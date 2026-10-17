@@ -5,7 +5,7 @@
 ## Our pledge
 
 We pledge to make participation in Rino Docs a harassment-free experience for everyone,
-regardless of age, background, identity, or experience level. This is an Alpha-stage
+regardless of age, background, identity, or experience level. This is a Beta-stage
 educational project; be patient with newcomers.
 
 ## Expected behavior

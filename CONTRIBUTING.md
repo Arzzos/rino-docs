@@ -1,6 +1,6 @@
 # Contributing to Rino Docs
 
-> Alpha project (`0.1.0-alpha`). Thanks for helping polish it.
+> Beta project (`0.1.0-beta`). Thanks for helping polish it.
 > En español: [`CONTRIBUTING.es.md`](CONTRIBUTING.es.md).
 
 ## 1. Branch rule (mandatory)
@@ -19,7 +19,7 @@ git push -u origin feat/my-change
 
 ```bash
 ./node_modules/.bin/tsc -b --force   # NOT bare tsc --noEmit (ignores project references)
-./node_modules/.bin/vitest run       # 57 tests must pass
+./node_modules/.bin/vitest run       # 90 tests must pass
 pnpm build                           # must succeed
 ```
 

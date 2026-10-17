@@ -1,8 +1,8 @@
-# Security Policy (Alpha)
+# Security Policy (Beta)
 
 > En español: [`SECURITY.es.md`](SECURITY.es.md).
 
-Rino Docs is in **Alpha**: client-only PWA, no backend, data stays in IndexedDB/LocalStorage.
+Rino Docs is in **Beta**: client-only PWA, no backend, data stays in IndexedDB/LocalStorage.
 There is no production SLA.
 
 ## Report a vulnerability
