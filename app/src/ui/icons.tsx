@@ -2,8 +2,8 @@
 import {
   Archive, ArrowLeft, ArrowRight, BookOpen, Camera, Check, ChevronDown, ChevronUp,
   Code2, Copy, Download, Eye, FileText, Globe, Image as ImageIcon, Link2, Moon,
-  Plus, RotateCw, Settings2, Shield, Sun, Table2, Text, Trash2, TriangleAlert, Type,
-  Upload, User, X, type LucideIcon,
+  MoreHorizontal, Pencil, Plus, RotateCw, Settings2, Shield, Sun, Table2, Text,
+  Trash2, TriangleAlert, Type, Upload, User, X, type LucideIcon,
 } from 'lucide-react'
 import type { SVGProps } from 'react'
 
@@ -56,6 +56,8 @@ const MAPA = {
   sun: Sun,
   moon: Moon,
   camera: Camera,
+  more: MoreHorizontal,
+  pencil: Pencil,
 } satisfies Record<string, LucideIcon>
 
 export type IconName = keyof typeof MAPA | 'github' | 'insta'

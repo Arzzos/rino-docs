@@ -14,6 +14,7 @@ import ErrorBoundary from './ui/ErrorBoundary'
 import Icon, { MarcaRD, type IconName } from './ui/icons'
 import MateriasPanel, { btnPri, btnSec, campo } from './ui/MateriasPanel'
 import ConfirmDialog from './ui/ConfirmDialog'
+import HojaAcciones, { type Accion } from './ui/HojaAcciones'
 import EvidenciaEditor from './ui/EvidenciaEditor'
 import PortafolioPanel from './ui/PortafolioPanel'
 
@@ -226,6 +227,7 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
   const [borradores, setBorradores] = useState<BorradorEvidencia[]>([])
   const [filtro, setFiltro] = useState(asignaturas[0]?.id ?? '')
   const [eliminarId, setEliminarId] = useState<string | null>(null)
+  const [menuEvidencia, setMenuEvidencia] = useState<Evidencia | null>(null)
   const [importando, setImportando] = useState(false)
   const [corrigiendo, setCorrigiendo] = useState<Evidencia | null>(null)
   const [vistaPdf, setVistaPdf] = useState<{ bytes: Uint8Array; nombre: string } | null>(null)
@@ -295,6 +297,50 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
     cargarListaBorradores().catch(() => undefined)
   }
 
+  /** Abre el PDF guardado tal cual se entregó. */
+  const verPdfOriginal = (e: Evidencia) => {
+    if (!e.pdfBase64) return
+    try {
+      setFalloPdf(null)
+      setVistaPdf({ bytes: base64ABytes(e.pdfBase64), nombre: e.nombreEvidencia || 'evidencia' })
+    } catch {
+      setFalloPdf('El PDF guardado está dañado y no se pudo abrir.')
+    }
+  }
+
+  /** Descarga el PDF original de una evidencia importada. */
+  const descargarOriginal = (e: Evidencia) => {
+    if (!e.pdfBase64) return
+    try {
+      setFalloPdf(null)
+      descargarPDF(base64ABytes(e.pdfBase64), e.nombreEvidencia || 'evidencia')
+    } catch {
+      setFalloPdf('El PDF guardado está dañado y no se pudo descargar.')
+    }
+  }
+
+  /** Genera y descarga el FO-205P11000-14 de una evidencia del editor. */
+  const descargarFo14 = async (e: Evidencia) => {
+    const inst = instrumentaciones.find((x) => x.id === asignaturas.find((y) => y.id === e.asignaturaId)?.instrumentacionId)
+    const b = await generarEvidenciaPDF(e, mapaDeIndicadores(e, inst))
+    descargarPDF(b, `FO-205P11000-14_${e.nombreEvidencia.slice(0, 30)}`)
+  }
+
+  /** Acciones de la hoja contextual, según el origen de la evidencia. */
+  const accionesDe = (e: Evidencia): Accion[] => {
+    const cerrar = () => setMenuEvidencia(null)
+    return e.origen === 'pdf' ? [
+      { id: 'ver', etiqueta: 'Ver PDF', icono: 'eye', onSelect: () => { cerrar(); verPdfOriginal(e) } },
+      { id: 'original', etiqueta: 'Descargar original', icono: 'download', onSelect: () => { cerrar(); descargarOriginal(e) } },
+      { id: 'corregir', etiqueta: 'Corregir nombre o competencia', icono: 'pencil', onSelect: () => { cerrar(); setCorrigiendo(e) } },
+      { id: 'eliminar', etiqueta: 'Eliminar evidencia', icono: 'trash', peligro: true, onSelect: () => { cerrar(); setEliminarId(e.id) } },
+    ] : [
+      { id: 'fo14', etiqueta: 'Descargar PDF FO-14', icono: 'download', onSelect: () => { cerrar(); void descargarFo14(e) } },
+      { id: 'editar', etiqueta: 'Editar evidencia', icono: 'pencil', onSelect: () => { cerrar(); void empezarEdicion(e) } },
+      { id: 'eliminar', etiqueta: 'Eliminar evidencia', icono: 'trash', peligro: true, onSelect: () => { cerrar(); setEliminarId(e.id) } },
+    ]
+  }
+
   if (creando || editando) {
     return (
       <div className="grid gap-3">
@@ -326,7 +372,7 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
             <button onClick={() => setImportando(true)} className="touch-btn flex items-center gap-2 rounded-xl t-surface2 px-4 font-semibold" title="Agregar un PDF ya entregado, tal cual se entregó"><Icon name="upload" size={16} /> Importar PDF</button>
           </div>
         </div>
-        <div className="grid gap-2 p-4 md:p-6">
+        <div className="grid grid-cols-1 gap-2 p-4 md:p-6">
         {asignaturas.length === 0 && (
           <p className="aviso aviso-warn mt-3 flex items-center gap-2">
             <Icon name="alert" size={16} /> Primero crea una materia y sube su instrumentación en la pestaña Materias.
@@ -340,7 +386,7 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
             const ev = b.evidencia
             const mat = asignaturas.find((a) => a.id === b.asignaturaId)
             return (
-              <div key={`borrador-${b.id}`} className="rounded-xl border border-dashed t-line t-inset p-3 text-sm">
+              <div key={`borrador-${b.id}`} className="min-w-0 rounded-xl border border-dashed t-line t-inset p-3 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="insignia insignia-warn">Borrador</span>
                   <p className="min-w-0 flex-1 truncate font-semibold">{ev.nombreEvidencia || '(sin nombre)'}{ev.competenciaNo ? ` · Comp. ${ev.competenciaNo}` : ''}</p>
@@ -356,53 +402,34 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
             )
           })}
           {lista.map((e) => e.origen === 'pdf' ? (
-            <div key={e.id} className="flex items-center gap-3 rounded-xl border t-line p-3 text-sm">
+            <div key={e.id} className="flex min-w-0 items-center gap-3 rounded-xl border t-line p-3 text-sm">
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-2 font-semibold">
                   <span className="insignia insignia-info">PDF</span>
-                  <span className="truncate">{e.nombreEvidencia || '(sin nombre)'} · Comp. {e.competenciaNo}</span>
+                  <span className="min-w-0 flex-1 truncate">{e.nombreEvidencia || '(sin nombre)'} · Comp. {e.competenciaNo}</span>
                 </p>
                 <p className="mt-0.5 text-xs t-muted">{e.asignatura}{e.pdfPaginas ? ` · ${e.pdfPaginas} págs.` : ''} · tal cual se entregó</p>
               </div>
-              <button onClick={() => {
-                if (!e.pdfBase64) return
-                try {
-                  setFalloPdf(null)
-                  setVistaPdf({ bytes: base64ABytes(e.pdfBase64), nombre: e.nombreEvidencia || 'evidencia' })
-                } catch {
-                  setFalloPdf('El PDF guardado está dañado y no se pudo abrir.')
-                }
-              }} className="touch-btn ml-auto flex shrink-0 items-center gap-1 rounded-lg t-surface2 px-3" title="Ver PDF">
-                <Icon name="eye" size={15} /> Ver
-              </button>
-              <button onClick={() => {
-                if (!e.pdfBase64) return
-                try {
-                  setFalloPdf(null)
-                  descargarPDF(base64ABytes(e.pdfBase64), e.nombreEvidencia || 'evidencia')
-                } catch {
-                  setFalloPdf('El PDF guardado está dañado y no se pudo descargar.')
-                }
-              }} className="touch-btn flex shrink-0 items-center gap-1 rounded-lg bg-[var(--ok-bg)] px-3 font-bold text-[var(--ok-ink)]" title="Descargar original">
-                <Icon name="download" size={15} /> PDF
-              </button>
-              <button onClick={() => setCorrigiendo(e)} className="touch-btn shrink-0 rounded-lg t-surface2 px-3" title="Corregir nombre o competencia">Corregir</button>
-              <button onClick={() => setEliminarId(e.id)} className="touch-btn shrink-0 rounded-lg bg-[var(--bad-soft)] px-2" title="Eliminar evidencia" aria-label="Eliminar evidencia">
-                <Icon name="trash" size={15} />
+              <button
+                onClick={() => setMenuEvidencia(e)}
+                className="touch-btn shrink-0 rounded-lg t-surface2 px-3"
+                title="Acciones" aria-label={`Acciones de ${e.nombreEvidencia || 'evidencia'}`} aria-haspopup="dialog"
+              >
+                <Icon name="more" size={18} />
               </button>
             </div>
           ) : (
-            <div key={e.id} className="flex items-center gap-3 rounded-xl border t-line p-3 text-sm">
+            <div key={e.id} className="flex min-w-0 items-center gap-3 rounded-xl border t-line p-3 text-sm">
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{e.nombreEvidencia || '(sin nombre)'} · Comp. {e.competenciaNo}</p>
                 <p className="mt-0.5 text-xs t-muted">{e.asignatura} · {e.bloques.length} bloques · [{e.indicadoresSeleccionados.join(',')}]</p>
               </div>
-              <button onClick={async () => { const inst = instrumentaciones.find((x) => x.id === asignaturas.find((y) => y.id === e.asignaturaId)?.instrumentacionId); const b = await generarEvidenciaPDF(e, mapaDeIndicadores(e, inst)); descargarPDF(b, `FO-205P11000-14_${e.nombreEvidencia.slice(0, 30)}`) }} className="touch-btn ml-auto flex shrink-0 items-center gap-1 rounded-lg bg-[var(--ok-bg)] px-3 font-bold text-[var(--ok-ink)]" title="Descargar PDF">
-                <Icon name="download" size={15} /> PDF
-              </button>
-              <button onClick={() => empezarEdicion(e)} className="touch-btn shrink-0 rounded-lg t-surface2 px-3" title="Editar">Editar</button>
-              <button onClick={() => setEliminarId(e.id)} className="touch-btn shrink-0 rounded-lg bg-[var(--bad-soft)] px-2" title="Eliminar evidencia" aria-label="Eliminar evidencia">
-                <Icon name="trash" size={15} />
+              <button
+                onClick={() => setMenuEvidencia(e)}
+                className="touch-btn shrink-0 rounded-lg t-surface2 px-3"
+                title="Acciones" aria-label={`Acciones de ${e.nombreEvidencia || 'evidencia'}`} aria-haspopup="dialog"
+              >
+                <Icon name="more" size={18} />
               </button>
             </div>
           ))}
@@ -415,6 +442,13 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
           mensaje="Esta acción no se puede deshacer."
           onCancel={() => setEliminarId(null)}
           onConfirm={() => { db.evidencias.delete(eliminarId).then(recargar); setEliminarId(null) }}
+        />
+      )}
+      {menuEvidencia && (
+        <HojaAcciones
+          titulo={menuEvidencia.nombreEvidencia || 'Evidencia'}
+          acciones={accionesDe(menuEvidencia)}
+          onClose={() => setMenuEvidencia(null)}
         />
       )}
       {importando && (
