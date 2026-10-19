@@ -9,7 +9,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['membretes/*.png', 'membretes/*.jpg', 'icons/*.png'],
+      includeAssets: ['membretes/*.png', 'membretes/*.jpg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Rino Docs — Portafolios TESCI',
         short_name: 'Rino Docs',
@@ -23,13 +23,16 @@ export default defineConfig({
         theme_color: '#1d4ed8',
         categories: ['education', 'productivity'],
         icons: [
-          { src: 'icons/icon-192-v2.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icons/icon-512-v2.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icons/icon-512-maskable-v2.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'icons/icon-192-v2.png?v=2', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-512-v2.png?v=2', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/icon-512-maskable-v2.png?v=2', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,jpg,svg,woff2}'],
+        // Sin `png`: los iconos se piden con `?v=2` (URL nueva, que el edge no
+        // tiene cacheada) y no hacen falta offline. Los membretes y el
+        // apple-touch-icon entran por `includeAssets`.
+        globPatterns: ['**/*.{js,css,html,jpg,svg,woff2}'],
         globIgnores: ['**/og.png'],
         runtimeCaching: [
           {
