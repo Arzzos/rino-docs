@@ -13,4 +13,4 @@
 /membretes/*
   Cache-Control: public, max-age=2592000, immutable
 /icons/*
-  Cache-Control: public, max-age=2592000, immutable
+  Cache-Control: public, max-age=86400, must-revalidate
