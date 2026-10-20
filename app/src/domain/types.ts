@@ -212,6 +212,7 @@ export function validarEvidencia(e: Evidencia): string[] {
     if (!e.pdfBase64) errores.push('Archivo PDF requerido')
     return errores
   }
+  if (!e.asignaturaId.trim()) errores.push('Elige la materia (3) de esta evidencia')
   if (!e.division.trim()) errores.push('División (1) requerida')
   if (!e.grupo.trim()) errores.push('Grupo (2) requerido')
   if (!e.asignatura.trim()) errores.push('Asignatura (3) requerida')

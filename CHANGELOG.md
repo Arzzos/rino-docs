@@ -4,6 +4,16 @@ Formato: Keep a Changelog + SemVer. Entradas bilingües (ES/EN) por release. / F
 
 ## [Unreleased] / [Sin publicar]
 
+### Corregido / Fixed
+- Nueva evidencia hereda la materia filtrada en la sección de Evidencias: antes se quedaba siempre con la primera materia de la lista y el documento salía con la asignatura, el docente y el grupo de otra materia. / New evidence now inherits the subject selected in the Evidencias filter; it no longer defaults to the first subject in the list.
+- Al cambiar de materia en el wizard, la competencia (7), la descripción (8) y los indicadores (9) se re-derivan de la instrumentación de esa materia y se limpian si ya no existen en ella. / Switching subject in the wizard re-derives competence (7), description (8) and indicators (9) from that subject's instrumentation, clearing them when they no longer apply.
+- La materia elegida ya no se revierte sola al editar una evidencia, y el docente de la materia anterior no se arrastra al cambiar. / The selected subject no longer reverts by itself when editing, and the previous subject's teacher is no longer carried over.
+- El grupo (2) y el docente (4) se pueden corregir a mano, y el ajuste solo aplica a la materia donde se capturó. / Group (2) and teacher (4) can be corrected by hand; the adjustment only applies to the subject where it was entered.
+
+### Añadido / Added
+- El wizard muestra siempre la materia activa y, en el paso Revisar, una vista previa de la tabla de datos (1 a 10) tal como saldrá impresa. / The wizard always shows the active subject, and the Review step previews the data table (1 to 10) exactly as it will print.
+- Si no hay materia filtrada, la evidencia nueva se abre sin materia y hay que elegirla antes de continuar. / With no subject selected, a new evidence opens empty and requires choosing one before continuing.
+
 ## [0.1.0-beta] — 2026-10-17
 
 ### Añadido / Added

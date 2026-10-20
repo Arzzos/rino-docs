@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { LENGUAJES_CODIGO, uid, validarEvidencia, type Alumno, type BloqueContenido, type Evidencia, type Integrante, type Instrumentacion } from '../domain/types'
-import { aplicarHerencia, elegirMateriaDefault, herenciaPendiente } from '../domain/herencia'
+import { aplicarHerencia, aplicarMateria, herenciaPendiente, rederivarCompetencia, resolverMateriaGuardada, resolverMateriaInicial, type AjustesManuales } from '../domain/herencia'
 import { BORRADOR_NUEVA, borradorConContenido, descartarBorrador, guardarBorrador } from '../infrastructure/borradores'
 import { db, type AsignaturaMeta } from '../infrastructure/db'
 import { optimizarImagen, rotar90 } from '../infrastructure/imageOptimizer'
@@ -25,28 +25,44 @@ export function nuevaEvidencia(perfil: Alumno): Evidencia {
   }
 }
 
-export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones, inicial, titulo, borradorId, aviso, onGuardado }: {
+export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones, inicial, titulo, borradorId, aviso, materiaInicial, onGuardado }: {
   perfil: Alumno; asignaturas: AsignaturaMeta[]; instrumentaciones: Instrumentacion[]
-  inicial: Evidencia | null; titulo?: string; borradorId?: string | null; aviso?: string | null; onGuardado: () => void
+  inicial: Evidencia | null; titulo?: string; borradorId?: string | null; aviso?: string | null
+  /** Materia heredada de la sección (filtro activo) al crear una evidencia nueva. */
+  materiaInicial?: string
+  onGuardado: () => void
 }) {
-  const [asigId, setAsigId] = useState(() => elegirMateriaDefault(asignaturas, inicial?.asignaturaId ?? ''))
+  // La materia guardada manda; si no hay, se hereda la filtrada en la sección.
+  // Nunca se elige sola: si no hay materia válida, el estudiante debe elegir.
+  const [asigId, setAsigId] = useState(() => {
+    const guardada = inicial
+      ? resolverMateriaGuardada(asignaturas, inicial.asignaturaId, inicial.asignatura)
+      : ''
+    return resolverMateriaInicial(asignaturas, guardada, materiaInicial ?? '')
+  })
   const asig = asignaturas.find((a) => a.id === asigId)
   const inst = instrumentaciones.find((i) => i.id === asig?.instrumentacionId)
   const [ev, setEv] = useState<Evidencia>(() => inicial ?? nuevaEvidencia(perfil))
+  // Ajustes manuales de (2) y (4): solo aplican a su propia materia.
+  const [ajustes, setAjustes] = useState<AjustesManuales>({})
 
-  // Completa campos vacíos desde la materia sin pisar la captura manual.
+  // La materia activa gobierna los datos heredados. Si desaparece de la lista,
+  // se limpia para que el estudiante elija otra.
   useEffect(() => {
-    const id = elegirMateriaDefault(asignaturas, inicial?.asignaturaId ?? asigId)
-    if (id !== asigId) {
-      setAsigId(id)
+    if (asigId && !asignaturas.some((a) => a.id === asigId)) {
+      setAsigId('')
       return
     }
-    const a = asignaturas.find((x) => x.id === id)
-    if (a) {
-      setEv((p) => (herenciaPendiente(p, a, perfil) ? aplicarHerencia(p, a, perfil) : p))
-    }
+    const a = asignaturas.find((x) => x.id === asigId)
+    if (!a) return
+    setEv((p) => {
+      // Una evidencia ya capturada no se pisa: solo se rellenan los vacíos.
+      if (inicial) return herenciaPendiente(p, a, perfil) ? aplicarHerencia(p, a, perfil) : p
+      // Una nueva toma los datos de su materia.
+      return aplicarMateria(p, a, perfil, ajustes)
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asignaturas, asigId])
+  }, [asignaturas, asigId, ajustes])
   const [paso, setPaso] = useState(0)
   const [estado, setEstado] = useState('')
   const [preview, setPreview] = useState<Uint8Array | null>(null)
@@ -75,14 +91,27 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
     return () => clearTimeout(id)
   }, [ev, borradorId])
 
+  /** Cambio explícito de materia: la nueva manda en (2)(3)(4) y re-deriva (7)(8)(9). */
   const cambiarMateria = (id: string) => {
     setAsigId(id)
     const a = asignaturas.find((x) => x.id === id)
-    if (a) setEv((p) => ({ ...p, asignaturaId: a.id, asignatura: a.nombre, docente: a.docente || p.docente, grupo: a.grupo || perfil.grupo, division: perfil.division, alumnoNombre: perfil.nombreCompleto, numeroControl: perfil.numeroControl }))
+    if (!a) {
+      setEv((p) => ({ ...p, asignaturaId: '', asignatura: '', docente: '' }))
+      return
+    }
+    const inst2 = instrumentaciones.find((i) => i.id === a.instrumentacionId)
+    setEv((p) => rederivarCompetencia(aplicarMateria(p, a, perfil, ajustes), inst2?.competencias))
   }
 
   const compSel = inst?.competencias.find((c) => c.numero === ev.competenciaNo)
-  const errores = useMemo(() => validarEvidencia(ev), [ev])
+  const errores = useMemo(() => {
+    const base = validarEvidencia(ev)
+    // La competencia debe existir en la instrumentación de la materia activa.
+    if (ev.competenciaNo && inst && !inst.competencias.some((c) => c.numero === ev.competenciaNo)) {
+      base.push(`La competencia ${ev.competenciaNo} no es de ${asig?.nombre ?? 'esta materia'}`)
+    }
+    return base
+  }, [ev, inst, asig])
 
   const elegirCompetencia = (numero: string) => {
     const c = inst?.competencias.find((x) => x.numero === numero)
@@ -130,6 +159,10 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
         <p className="overline">FO-205P11000-14 · Paso {paso + 1} de 3 — {PASOS[paso]}</p>
         <h2 className="display mt-1 truncate text-3xl font-bold">{titulo ?? (inicial ? 'Editar evidencia' : 'Nueva evidencia')}</h2>
         <p className="mt-1 text-xs t-muted">Se guarda un borrador automático mientras editas. Caduca en 15 días si no guardas.</p>
+        <p className={`mt-2 flex items-center gap-2 text-xs font-semibold ${asig ? 't-muted' : 'text-[var(--warn-bg)]'}`}>
+          <Icon name={asig ? 'book' : 'alert'} size={14} />
+          {asig ? `Materia: ${asig.nombre}${asig.docente ? ` · ${asig.docente}` : ''}${asig.grupo ? ` · ${asig.grupo}` : ''}` : 'Sin materia: elige una en el paso 1 para que el documento salga con la materia correcta.'}
+        </p>
       </div>
       <div className="p-4 md:p-6">
       {aviso && <p role="status" className="aviso aviso-warn mt-2 text-xs">{aviso}</p>}
@@ -157,6 +190,23 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
               {asignaturas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
             </select>
             {!asig && <span className="text-xs font-semibold text-[var(--warn-bg)]">Elige la materia para heredar asignatura, docente y grupo.</span>}
+          </label>
+          <label className="grid gap-1 text-sm">Docente (4)
+            <input
+              value={ev.docente}
+              onChange={(e) => { setAjustes((p) => ({ ...p, docente: { valor: e.target.value, materiaId: asigId } })); setEv({ ...ev, docente: e.target.value }) }}
+              className={campo}
+              placeholder={asig?.docente || 'Nombre del docente'}
+            />
+            {asig && !asig.docente && <span className="text-xs font-semibold text-[var(--warn-bg)]">La instrumentación no trae docente: escríbelo aquí.</span>}
+          </label>
+          <label className="grid gap-1 text-sm">Grupo (2)
+            <input
+              value={ev.grupo}
+              onChange={(e) => { setAjustes((p) => ({ ...p, grupo: { valor: e.target.value, materiaId: asigId } })); setEv({ ...ev, grupo: e.target.value }) }}
+              className={campo}
+              placeholder={asig?.grupo || perfil.grupo || 'Grupo'}
+            />
           </label>
           <label className="grid gap-1 text-sm">Fecha de entrega (6)
             <input value={ev.fechaEntrega} onChange={(e) => setEv({ ...ev, fechaEntrega: e.target.value })} className={campo} />
@@ -192,7 +242,7 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
           {asig && (
             <p className="aviso aviso-ok flex items-center gap-2 text-xs md:col-span-2">
               <Icon name="check" size={14} />
-              Heredado de {asig.nombre}{asig.docente ? ` · ${asig.docente}` : ''}{asig.grupo ? ` · ${asig.grupo}` : ''} — editable arriba si cambia.
+              Heredado de {asig.nombre}{asig.docente ? ` · ${asig.docente}` : ''}{asig.grupo ? ` · ${asig.grupo}` : ''} — el grupo y el docente se corrigen arriba.
             </p>
           )}
         </div>
@@ -270,6 +320,7 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
       {paso === 2 && (
         <div className="mt-3 text-sm">
           <p className="font-bold">{ev.nombreEvidencia || '(sin nombre)'} · Comp. {ev.competenciaNo || '—'} · {ev.bloques.length} bloques</p>
+          <TablaDatos ev={ev} />
           {errores.length > 0
             ? <ul className="mt-2 list-disc pl-5 text-[var(--warn-bg)]">{errores.map((e) => <li key={e}>{e}</li>)}</ul>
             : <p className="mt-2 font-semibold text-[var(--ok-bg)]">Validación completa. Lista para exportar.</p>}
@@ -293,6 +344,40 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
       </div>
       {preview && <PreviewModal bytes={preview} nombre={`FO-205P11000-14_${ev.nombreEvidencia || 'evidencia'}`} onClose={() => setPreview(null)} />}
     </section>
+  )
+}
+
+/**
+ * Tabla de datos tal como saldrá impresa en el FO-205P11000-14.
+ * Sirve para que el estudiante revise la materia, el docente y la competencia
+ * antes de exportar: es donde se cuelan los datos de otra materia.
+ */
+function TablaDatos({ ev }: { ev: Evidencia }) {
+  const equipo = [ev.alumnoNombre, ev.numeroControl, ...ev.integrantes.map((x) => `${x.nombre} ${x.control}`)].filter(Boolean).join(' · ')
+  const filas: [string, string][] = [
+    ['División (1)', ev.division],
+    ['Grupo (2)', ev.grupo],
+    ['Asignatura (3)', ev.asignatura],
+    ['Docente (4)', ev.docente],
+    ['Nombre y número de control (5)', equipo],
+    ['Fecha de entrega (6)', ev.fechaEntrega],
+    ['Competencia No. (7)', ev.competenciaNo],
+    ['Descripción (8)', ev.descripcionCompetencia],
+    ['Indicador de alcance (9)', ev.indicadoresSeleccionados.join(', ')],
+    ['Evidencia de aprendizaje (10)', ev.nombreEvidencia],
+  ]
+  return (
+    <div className="mt-3 overflow-hidden rounded-xl border t-line">
+      <p className="border-b t-line t-surface2 px-3 py-2 text-xs font-bold uppercase">Tabla de datos del documento</p>
+      <dl className="grid gap-x-3 gap-y-1 p-3 text-sm sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
+        {filas.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="font-semibold t-muted">{k}</dt>
+            <dd className="min-w-0 break-words">{v || '—'}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   )
 }
 
