@@ -61,6 +61,11 @@ describe('validarEvidencia (FO-205P11000-14, 10 campos)', () => {
   it('permite equipo vacío (no todo es en equipo)', () => {
     expect(validarEvidencia({ ...base, integrantes: [] })).toEqual([])
   })
+  it('exige elegir materia en las evidencias del editor', () => {
+    const sinMateria = validarEvidencia({ ...base, asignaturaId: '' })
+    expect(sinMateria.join()).toMatch(/materia/i)
+    expect(validarEvidencia(base)).toEqual([])
+  })
 })
 
 describe('borradores de evidencia (autosave 15 días)', () => {
@@ -400,12 +405,66 @@ describe('herencia materia → evidencia', () => {
   }
   const mat = { id: 'm1', nombre: 'Cálculo', docente: 'Docente Ejemplo', grupo: '1011V' }
 
-  it('elige la actual si existe, si no la primera, si no vacío', async () => {
-    const { elegirMateriaDefault } = await import('../src/domain/herencia')
-    expect(elegirMateriaDefault([mat], 'm1')).toBe('m1')
-    expect(elegirMateriaDefault([mat], '')).toBe('m1')
-    expect(elegirMateriaDefault([mat], 'otra')).toBe('m1')
-    expect(elegirMateriaDefault([], '')).toBe('')
+  it('elige la guardada si existe; si no, la heredada; si no, vacío', async () => {
+    const { resolverMateriaInicial } = await import('../src/domain/herencia')
+    // La guardada manda sobre la heredada.
+    expect(resolverMateriaInicial([mat], 'm1', 'm2')).toBe('m1')
+    // Sin guardada, hereda la materia filtrada de la sección.
+    expect(resolverMateriaInicial([mat], '', 'm1')).toBe('m1')
+    // Guardada que ya no existe: no se re-apunta a otra materia.
+    expect(resolverMateriaInicial([mat], 'borrada', 'm1')).toBe('')
+    // Heredada que no existe: vacío, el estudiante debe elegir.
+    expect(resolverMateriaInicial([mat], '', 'borrada')).toBe('')
+    // Sin ninguna: vacío (nunca se elige sola).
+    expect(resolverMateriaInicial([mat], '', '')).toBe('')
+    expect(resolverMateriaInicial([], '', '')).toBe('')
+  })
+
+  it('la materia guardada se resuelve por nombre si falta el id (registros viejos)', async () => {
+    const { resolverMateriaGuardada } = await import('../src/domain/herencia')
+    expect(resolverMateriaGuardada([mat], 'm1', 'Cálculo')).toBe('m1')
+    expect(resolverMateriaGuardada([mat], '', 'Cálculo')).toBe('m1')
+    expect(resolverMateriaGuardada([mat], '', '  Cálculo ')).toBe('m1')
+    expect(resolverMateriaGuardada([mat], '', 'Física')).toBe('')
+    expect(resolverMateriaGuardada([mat], '', '')).toBe('')
+  })
+
+  it('el cambio de materia pisa (2)(3)(4) y no arrastra datos de la anterior', async () => {
+    const { aplicarMateria } = await import('../src/domain/herencia')
+    const otra = { id: 'm2', nombre: 'Programación', docente: 'Docente Otro', grupo: '1011M' }
+    const previa = { ...vacia, asignaturaId: 'm1', asignatura: 'Cálculo', docente: 'Docente Ejemplo', grupo: '1011V' }
+    const n = aplicarMateria(previa, otra, perfil)
+    expect(n.asignaturaId).toBe('m2')
+    expect(n.asignatura).toBe('Programación')
+    expect(n.docente).toBe('Docente Otro')
+    expect(n.grupo).toBe('1011M')
+  })
+
+  it('el cambio de materia conserva el docente capturado a mano solo en su materia', async () => {
+    const { aplicarMateria } = await import('../src/domain/herencia')
+    const otra = { id: 'm2', nombre: 'Programación', docente: 'Docente Otro', grupo: '1011M' }
+    const ajustes = { docente: { valor: 'Prof. Manual', materiaId: 'm1' } }
+    // En su propia materia manda el ajuste manual.
+    expect(aplicarMateria(vacia, mat, perfil, ajustes).docente).toBe('Prof. Manual')
+    // En otra materia, manda el docente de esa materia.
+    expect(aplicarMateria(vacia, otra, perfil, ajustes).docente).toBe('Docente Otro')
+  })
+
+  it('re-deriva (7)(8)(9) desde la instrumentación de la materia', async () => {
+    const { rederivarCompetencia } = await import('../src/domain/herencia')
+    const comps = [{ numero: '1', descripcion: 'Límites', indicadores: [{ letra: 'A', descripcion: 'Alfa' }, { letra: 'B', descripcion: 'Beta' }] }]
+    const conComp = { ...vacia, competenciaNo: '1', descripcionCompetencia: 'Límites', indicadoresSeleccionados: ['A', 'B'] }
+    const n = rederivarCompetencia(conComp, comps)
+    expect(n.competenciaNo).toBe('1')
+    expect(n.descripcionCompetencia).toBe('Límites')
+    expect(n.indicadoresSeleccionados).toEqual(['A', 'B'])
+    // Competencia que no existe en la nueva materia: se limpia.
+    const limpio = rederivarCompetencia(conComp, [{ numero: '2', descripcion: 'Otra', indicadores: [] }])
+    expect(limpio.competenciaNo).toBe('')
+    expect(limpio.descripcionCompetencia).toBe('')
+    expect(limpio.indicadoresSeleccionados).toEqual([])
+    // Sin instrumentación: también se limpia.
+    expect(rederivarCompetencia(conComp, undefined).competenciaNo).toBe('')
   })
 
   it('rellena vacíos sin pisar captura manual', async () => {

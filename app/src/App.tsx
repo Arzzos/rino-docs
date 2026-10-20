@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DIVISIONES_TESCI, uid, type Alumno, type Competencia, type Diagnostica, type Evidencia, type Instrumentacion } from './domain/types'
 import { aceptacionVigente, guardarAceptacion, leerAceptacion } from './domain/legal'
 import ModalLegal from './ui/Terminos'
@@ -226,6 +226,9 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
   const [aviso, setAviso] = useState<string | null>(null)
   const [borradores, setBorradores] = useState<BorradorEvidencia[]>([])
   const [filtro, setFiltro] = useState(asignaturas[0]?.id ?? '')
+  // El filtro arranca en la primera materia, pero solo si el usuario no elige
+  // otra: si la lista aún no había cargado, se corrige al llegar.
+  const filtroManual = useRef(false)
   const [eliminarId, setEliminarId] = useState<string | null>(null)
   const [menuEvidencia, setMenuEvidencia] = useState<Evidencia | null>(null)
   const [importando, setImportando] = useState(false)
@@ -235,6 +238,10 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
   const lista = evidencias.filter((e) => !filtro || e.asignaturaId === filtro)
   const borradoresVisibles = borradores.filter((b) => !filtro || b.asignaturaId === filtro)
   const editandoActivo = creando || !!editando
+
+  useEffect(() => {
+    if (!filtroManual.current && !filtro && asignaturas.length > 0) setFiltro(asignaturas[0].id)
+  }, [asignaturas, filtro])
 
   useEffect(() => {
     onBloqueo(editandoActivo)
@@ -350,7 +357,7 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
         <EvidenciaEditor
           perfil={perfil} asignaturas={asignaturas} instrumentaciones={instrumentaciones}
           titulo={editando ? 'Editar evidencia' : 'Nueva evidencia'}
-          borradorId={borradorId} aviso={aviso}
+          borradorId={borradorId} aviso={aviso} materiaInicial={filtro}
           inicial={editando ? normalizarEvidencia(editando) : inicialNueva ? normalizarEvidencia(inicialNueva) : null} onGuardado={() => { recargar(); cerrarEditor() }}
         />
       </div>
@@ -364,7 +371,7 @@ function EvidenciasTab({ perfil, asignaturas, instrumentaciones, evidencias, rec
           <p className="overline">Paso 2 — Formato FO-205P11000-14</p>
           <h2 className="display mt-1 text-3xl font-bold">Evidencias{lista.length > 0 && <span className="text-lg font-normal t-muted"> · {lista.length}</span>}</h2>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <select value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label="Filtrar por materia" className={`${campo} max-w-56 flex-1`}>
+            <select value={filtro} onChange={(e) => { filtroManual.current = true; setFiltro(e.target.value) }} aria-label="Filtrar por materia" className={`${campo} max-w-56 flex-1`}>
               <option value="">Todas las materias</option>
               {asignaturas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
             </select>
@@ -476,7 +483,7 @@ function ImportarPdfModal({ perfil, asignaturas, instrumentaciones, inicialAsigI
   perfil: Alumno; asignaturas: AsignaturaMeta[]; instrumentaciones: Instrumentacion[];
   inicialAsigId: string; onCancel: () => void; onGuardado: () => void
 }) {
-  const [asigId, setAsigId] = useState(inicialAsigId || asignaturas[0]?.id || '')
+  const [asigId, setAsigId] = useState(inicialAsigId)
   const [nombre, setNombre] = useState('')
   const [comp, setComp] = useState('')
   const [archivo, setArchivo] = useState<{ nombre: string; mb: number; paginas: number; base64: string } | null>(null)
@@ -547,6 +554,7 @@ function ImportarPdfModal({ perfil, asignaturas, instrumentaciones, inicialAsigI
           )}
           <label className="grid gap-1 text-sm font-medium">Materia
             <select value={asigId} onChange={(e) => setAsigId(e.target.value)} className={campo}>
+              <option value="">— elegir materia —</option>
               {asignaturas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
             </select>
           </label>
