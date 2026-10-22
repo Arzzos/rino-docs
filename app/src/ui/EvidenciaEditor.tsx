@@ -7,6 +7,7 @@ import { optimizarImagen, rotar90 } from '../infrastructure/imageOptimizer'
 import { resaltarHTML } from '../infrastructure/codeHighlight'
 import { descargarPDF, generarEvidenciaPDF, mapaDeIndicadores, pdfAUrl } from '../infrastructure/fo14Pdf'
 import PreviewModal from './PreviewModal'
+import RecorteImagen from './RecorteImagen'
 import VisorPdfMovil, { useEsMovil } from './PdfVista'
 import LimiteVisor from './LimiteVisor'
 import Icon from './icons'
@@ -66,6 +67,9 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
   const [paso, setPaso] = useState(0)
   const [estado, setEstado] = useState('')
   const [preview, setPreview] = useState<Uint8Array | null>(null)
+  const [recorteAbierto, setRecorteAbierto] = useState(false)
+  const [recorteSrc, setRecorteSrc] = useState('')
+  const [recorteBloqueId, setRecorteBloqueId] = useState<string | null>(null)
   const fotoInicial = useRef('')
   if (!fotoInicial.current) fotoInicial.current = JSON.stringify({ ...ev, actualizadaEn: 0 })
   // Estado persistido de referencia para el autosave.
@@ -258,6 +262,9 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
             <label className={`${btnSec} flex cursor-pointer items-center gap-1`}><Icon name="plus" size={15} /> Imagen
               <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => { for (const f of Array.from(e.target.files ?? [])) await subirImagen(f); e.target.value = '' }} />
             </label>
+            <label className={`${btnSec} flex cursor-pointer items-center gap-1`}><Icon name="camera" size={15} /> Cámara
+              <input type="file" accept="image/*" capture className="hidden" onChange={async (e) => { for (const f of Array.from(e.target.files ?? [])) await subirImagen(f); e.target.value = '' }} />
+            </label>
             <button onClick={() => addBloque({ id: uid(), tipo: 'referencia', texto: '' })} className={`${btnSec} flex items-center gap-1`}><Icon name="plus" size={15} /> Referencia</button>
             <button onClick={() => addBloque({ id: uid(), tipo: 'salto' })} className={`${btnSec} flex items-center gap-1`} title="Forzar salto de página"><Icon name="plus" size={15} /> Salto de página</button>
           </div>
@@ -296,6 +303,11 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
                         className="touch-btn flex items-center gap-1 rounded-lg t-surface2 px-3 text-sm"
                         title="Girar 90°"
                       ><Icon name="rotate" size={14} /> Rotar</button>
+                      <button
+                        onClick={() => { setRecorteBloqueId(b.id); setRecorteSrc(b.dataUrl); setRecorteAbierto(true) }}
+                        className="touch-btn flex items-center gap-1 rounded-lg t-surface2 px-3 text-sm"
+                        title="Recortar imagen"
+                      ><Icon name="crop" size={14} /> Recortar</button>
                     </div>
                     <div className="mt-2 grid gap-1 text-xs t-muted md:grid-cols-2">
                       <label className="flex items-center gap-2">Ancho {b.anchoPct}%
@@ -343,6 +355,18 @@ export default function EvidenciaEditor({ perfil, asignaturas, instrumentaciones
       {estado && paso !== 2 && <p role="status" className="mt-2 text-sm font-semibold text-[var(--accent)]">{estado}</p>}
       </div>
       {preview && <PreviewModal bytes={preview} nombre={`FO-205P11000-14_${ev.nombreEvidencia || 'evidencia'}`} onClose={() => setPreview(null)} />}
+      {recorteAbierto && (
+        <RecorteImagen
+          dataUrl={recorteSrc}
+          onAplicar={(nuevoDataUrl, ancho, alto) => {
+            setBloques(ev.bloques.map((x) => (x.id === recorteBloqueId && x.tipo === 'imagen' ? { ...x, dataUrl: nuevoDataUrl, anchoOriginal: ancho, altoOriginal: alto } : x)))
+            setRecorteAbierto(false)
+            setRecorteBloqueId(null)
+            setEstado('Imagen recortada')
+          }}
+          onCancel={() => setRecorteAbierto(false)}
+        />
+      )}
     </section>
   )
 }
