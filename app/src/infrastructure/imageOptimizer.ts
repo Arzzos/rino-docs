@@ -44,6 +44,43 @@ export async function optimizarImagen(file: File | Blob): Promise<OptimizedImage
   return { dataUrl, ancho: w, alto: h, bytesAprox, formato: mime }
 }
 
+/** Carga un dataUrl como imagen. */
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((res, rej) => {
+    const el = new Image()
+    el.onload = () => res(el)
+    el.onerror = rej
+    el.src = dataUrl
+  })
+}
+
+/**
+ * Recorta una región rectangular (fracciones 0..1) de una imagen dataUrl.
+ * Devuelve el dataUrl del recorte sin deformar (proporción del rect).
+ */
+export async function recortarImagen(
+  dataUrl: string,
+  rect: { x0: number; y0: number; x1: number; y1: number }
+): Promise<{ dataUrl: string; ancho: number; alto: number }> {
+  const img = await loadImage(dataUrl)
+  const w = Math.max(1, Math.round(img.naturalWidth * (rect.x1 - rect.x0)))
+  const h = Math.max(1, Math.round(img.naturalHeight * (rect.y1 - rect.y0)))
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d', { alpha: true })
+  if (!ctx) throw new Error('Canvas no disponible')
+  ctx.drawImage(
+    img,
+    rect.x0 * img.naturalWidth, rect.y0 * img.naturalHeight,
+    w, h,
+    0, 0, w, h
+  )
+  const esPng = dataUrl.includes('png') || dataUrl.includes('webp') || (await detectaAlpha(canvas))
+  const out = canvas.toDataURL(esPng ? 'image/png' : 'image/jpeg', JPEG_Q)
+  return { dataUrl: out, ancho: w, alto: h }
+}
+
 /** Gira 90° en sentido horario un dataURL (las dimensiones se intercambian). */
 export async function rotar90(dataUrl: string): Promise<{ dataUrl: string; ancho: number; alto: number }> {
   const img = await new Promise<HTMLImageElement>((res, rej) => {

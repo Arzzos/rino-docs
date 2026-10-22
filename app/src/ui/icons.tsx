@@ -1,7 +1,7 @@
 // Iconos Lucide + marcas propias en SVG (GitHub/Instagram).
 import {
   Archive, ArrowLeft, ArrowRight, BookOpen, Camera, Check, ChevronDown, ChevronUp,
-  Code2, Copy, Download, Eye, FileText, Globe, Image as ImageIcon, Link2, Moon,
+  Code2, Copy, Crop, Download, Eye, FileText, Globe, Image as ImageIcon, Link2, Moon,
   MoreHorizontal, Pencil, Plus, RotateCw, Settings2, Shield, Sun, Table2, Text,
   Trash2, TriangleAlert, Type, Upload, User, X, type LucideIcon,
 } from 'lucide-react'
@@ -56,6 +56,7 @@ const MAPA = {
   sun: Sun,
   moon: Moon,
   camera: Camera,
+  crop: Crop,
   more: MoreHorizontal,
   pencil: Pencil,
 } satisfies Record<string, LucideIcon>
