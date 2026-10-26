@@ -212,22 +212,33 @@ export async function dibujarImagen(f: Flujo, doc: PDFDocument, dataUrl: string,
   const ratio = img.height / img.width
   const pct = Math.min(100, Math.max(25, anchoPct || 100))
   const esc = Math.min(1, Math.max(0.25, escala || 1))
-  // alto máximo disponible en la página actual (sin invadir footer)
-  const minY = M_B + FOOTER_H + (pie ? 16 : 6)
+  // Hueco que consume la imagen con su pie al bajar el flujo (4 + 13 + 5 o 4 + 5).
+  const minY = M_B + FOOTER_H + (pie ? 24 : 10)
   const disp = f.y - minY
-  const paginaLlena = (f.yInicial ?? f.y) - minY
-  // Si no cabe un mínimo razonable, se abre hoja nueva a tamaño completo.
-  // La escala del usuario se respeta.
-  if (disp < 60 || (disp < paginaLlena * 0.55 && f.y < (f.yInicial ?? f.y) - 40)) {
-    const { page, y } = (await import('./pdfTheme')).paginaConMembrete(f.t)
-    f.page = page
-    f.y = y
-    f.yInicial = y
+  const paginaLlena = Math.max(1, (f.yInicial ?? f.y) - minY)
+  // La decisión se toma midiendo la imagen, no con un umbral de hoja:
+  // si la altura dibujable cabe donde está el flujo, se queda ahí aunque
+  // la tabla de datos haya consumido la mayor parte de la página.
+  const wUser = (CONTENT_W * pct) / 100
+  const hUser = wUser * ratio
+  let h = Math.min(hUser, paginaLlena * esc)
+  if (h > disp) {
+    // Una imagen que apenas se pasa se encoge y se queda: moverla a otra hoja
+    // cuesta una página entera. Solo salta si la diferencia es grande o si
+    // el hueco no da ni para una figura legible.
+    const perdidaModerada = disp >= 60 && h <= disp * 1.3
+    if (disp >= paginaLlena * 0.55 || perdidaModerada) {
+      h = disp
+    } else {
+      // La imagen no cabe en lo que resta de hoja: pasa a hoja nueva completa.
+      const { page, y } = (await import('./pdfTheme')).paginaConMembrete(f.t)
+      f.page = page
+      f.y = y
+      f.yInicial = y
+      h = Math.min(hUser, (y - minY) * esc)
+    }
   }
-  const altoMax = Math.max(60, (f.y - minY) * esc)
-  let w = (CONTENT_W * pct) / 100
-  let h = w * ratio
-  if (h > altoMax) { h = altoMax; w = h / ratio }
+  const w = h / ratio
   const x = M_L + (CONTENT_W - w) / 2
   f.page.drawImage(img, { x, y: f.y - h, width: w, height: h })
   f.y -= h + 4

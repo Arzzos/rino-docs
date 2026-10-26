@@ -126,6 +126,82 @@ describe('imágenes a página completa', () => {
     await dibujarImagen(f, doc, PNG_1PX, undefined, 100, 1)
     expect(doc.getPageCount()).toBe(1)
   })
+
+  it('se queda en la hoja si cabe bajo una tabla larga (indicadores extensos)', async () => {
+    const { PDFDocument } = await import('pdf-lib')
+    const { crearTema, nuevoFlujo, M_B, FOOTER_H } = await import('../src/infrastructure/pdfTheme')
+    const { dibujarImagen } = await import('../src/infrastructure/fo14Pdf')
+    const doc = await PDFDocument.create()
+    const t = await crearTema(doc)
+    const f = nuevoFlujo(t)
+    // La tabla de datos (5)-(9) dejó ~35% de la hoja útil.
+    const minY = M_B + FOOTER_H + 6
+    f.y = minY + (f.yInicial - minY) * 0.35
+    await dibujarImagen(f, doc, PNG_1PX, undefined, 35, 1)
+    expect(doc.getPageCount()).toBe(1)
+  })
+
+  it('se encoge y se queda si el hueco es apenas menor que la imagen', async () => {
+    const { PDFDocument } = await import('pdf-lib')
+    const { crearTema, nuevoFlujo, M_B, FOOTER_H } = await import('../src/infrastructure/pdfTheme')
+    const { dibujarImagen } = await import('../src/infrastructure/fo14Pdf')
+    const doc = await PDFDocument.create()
+    const t = await crearTema(doc)
+    const f = nuevoFlujo(t)
+    // Queda ~19% de hoja: la imagen mínima (25% de ancho) se pasa por poco.
+    const minY = M_B + FOOTER_H + 6
+    f.y = minY + (f.yInicial - minY) * 0.19
+    await dibujarImagen(f, doc, PNG_1PX, undefined, 25, 1)
+    expect(doc.getPageCount()).toBe(1)
+  })
+
+  it('salta a hoja nueva si el hueco es mucho menor que la imagen', async () => {
+    const { PDFDocument } = await import('pdf-lib')
+    const { crearTema, nuevoFlujo, M_B, FOOTER_H } = await import('../src/infrastructure/pdfTheme')
+    const { dibujarImagen } = await import('../src/infrastructure/fo14Pdf')
+    const doc = await PDFDocument.create()
+    const t = await crearTema(doc)
+    const f = nuevoFlujo(t)
+    const minY = M_B + FOOTER_H + 6
+    f.y = minY + (f.yInicial - minY) * 0.1
+    await dibujarImagen(f, doc, PNG_1PX, undefined, 25, 1)
+    expect(doc.getPageCount()).toBe(2)
+  })
+
+  it('con pie de foto también se queda si cabe', async () => {
+    const { PDFDocument } = await import('pdf-lib')
+    const { crearTema, nuevoFlujo, M_B, FOOTER_H } = await import('../src/infrastructure/pdfTheme')
+    const { dibujarImagen } = await import('../src/infrastructure/fo14Pdf')
+    const doc = await PDFDocument.create()
+    const t = await crearTema(doc)
+    const f = nuevoFlujo(t)
+    const minY = M_B + FOOTER_H + 6
+    f.y = minY + (f.yInicial - minY) * 0.35
+    await dibujarImagen(f, doc, PNG_1PX, 'Figura 1', 30, 1)
+    expect(doc.getPageCount()).toBe(1)
+  })
+
+  it('evidencia real: foto pequeña tras 6 indicadores largos sigue en la página 1', async () => {
+    const letras = ['A', 'B', 'C', 'D', 'E', 'F']
+    const largo = 'Analiza, plantea y resuelve problemas aplicando los teoremas de límites y derivadas en situaciones del entorno profesional, argumentando cada paso del procedimiento con lenguaje técnico.'
+    const ev: Evidencia = {
+      ...base,
+      integrantes: [
+        { nombre: 'Integrante Uno', control: '20230001' },
+        { nombre: 'Integrante Dos', control: '20230002' },
+        { nombre: 'Integrante Tres', control: '20230003' },
+      ],
+      indicadoresSeleccionados: letras,
+      bloques: [
+        { id: 't', tipo: 'texto', texto: 'En el siguiente reporte se presentan los ejercicios resueltos durante la unidad.' },
+        { id: 'i', tipo: 'imagen', dataUrl: PNG_1PX, pie: 'Figura 1. Evidencia del trabajo en clase', anchoOriginal: 1, altoOriginal: 1, anchoPct: 25, escala: 1 },
+      ],
+    }
+    const mapa = Object.fromEntries(letras.map((l) => [l, largo]))
+    const { PDFDocument } = await import('pdf-lib')
+    const bytes = await generarEvidenciaPDF(ev, mapa)
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1)
+  })
 })
 
 describe('migración v1 → actual', () => {
