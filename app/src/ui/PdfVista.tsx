@@ -49,18 +49,17 @@ export default function VisorPdfMovil({ bytes, nombre }: { bytes: Uint8Array; no
     let vivo = true
     let doc: DocPdf | null = null
     let obrero: Worker | null = null
+    let motor: Awaited<ReturnType<typeof cargarPdfJs>> | null = null
     ;(async () => {
       try {
         if (bytes.length === 0) throw new Error('Documento vacío')
         const pdfjs = await cargarPdfJs()
+        motor = pdfjs
         if (!vivo) return
         const ob = await crearObreroPdf()
         if (!vivo) { ob.terminate(); return }
         obrero = ob
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-          'pdfjs-dist/build/pdf.worker.min.mjs',
-          import.meta.url,
-        ).toString()
+        // El worker propio ya incluye el polyfill; no hace falta workerSrc.
         pdfjs.GlobalWorkerOptions.workerPort = obrero
         doc = (await pdfjs.getDocument({ data: bytes.slice() }).promise) as unknown as DocPdf
         if (!vivo) {
@@ -79,7 +78,10 @@ export default function VisorPdfMovil({ bytes, nombre }: { bytes: Uint8Array; no
     return () => {
       vivo = false
       if (doc) void doc.destroy().catch(() => undefined)
-      try { obrero?.terminate() } catch { /* obrero no disponible */ }
+      if (obrero) {
+        if (motor) motor.GlobalWorkerOptions.workerPort = null
+        try { obrero.terminate() } catch { /* obrero no disponible */ }
+      }
     }
   }, [bytes, carga])
 
