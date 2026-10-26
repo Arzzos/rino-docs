@@ -5,6 +5,7 @@ Formato: Keep a Changelog + SemVer. Entradas bilingües (ES/EN) por release. / F
 ## [Unreleased] / [Sin publicar]
 
 ### Corregido / Fixed
+- FO-205P11000-14: la imagen se queda en la página 1 cuando cabe debajo de la tabla de datos, aunque los indicadores de alcance sean largos; si falta poco espacio se ajusta al hueco en lugar de abrir otra hoja. / FO-205P11000-14: a picture now stays on page 1 when it fits below the data table, even with long scope indicators; when space is just short it scales to fit instead of starting a new page.
 - Nueva evidencia hereda la materia filtrada en la sección de Evidencias: antes se quedaba siempre con la primera materia de la lista y el documento salía con la asignatura, el docente y el grupo de otra materia. / New evidence now inherits the subject selected in the Evidencias filter; it no longer defaults to the first subject in the list.
 - Al cambiar de materia en el wizard, la competencia (7), la descripción (8) y los indicadores (9) se re-derivan de la instrumentación de esa materia y se limpian si ya no existen en ella. / Switching subject in the wizard re-derives competence (7), description (8) and indicators (9) from that subject's instrumentation, clearing them when they no longer apply.
 - La materia elegida ya no se revierte sola al editar una evidencia, y el docente de la materia anterior no se arrastra al cambiar. / The selected subject no longer reverts by itself when editing, and the previous subject's teacher is no longer carried over.
