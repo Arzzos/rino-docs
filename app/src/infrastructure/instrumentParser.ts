@@ -2,8 +2,10 @@
 // Tolera variantes de etiquetas, tablas anidadas y saltos de línea.
 // Conserva los bytes originales y la orientación para el portafolio.
 
+import './pdfCompat'
 import mammoth from 'mammoth'
 import JSZip from 'jszip'
+import { crearObreroPdf } from './pdfMotor'
 import type { Competencia, IndicadorAlcance, Instrumentacion } from '../domain/types'
 import { uid } from '../domain/types'
 
@@ -59,34 +61,52 @@ async function parsearDocx(buf: Uint8Array, b64: string, file: File, prog?: (m: 
 
 // PDF
 async function parsearPdf(buf: Uint8Array, b64: string, file: File, onProgreso?: (m: string) => void) {
-  const pdfjs = await import('pdfjs-dist')
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url,
-  ).toString()
-  const pdf = await pdfjs.getDocument({ data: buf.slice() }).promise
-  let texto = ''
-  let landscape = 0
-  const total = Math.min(pdf.numPages, 60)
-  const paginas: ItemPdfEstruct[][] = []
-  for (let p = 1; p <= total; p++) {
-    onProgreso?.(`Leyendo PDF… página ${p}/${pdf.numPages}`)
-    const page = await pdf.getPage(p)
-    const vp = page.getViewport({ scale: 1 })
-    if (vp.width > vp.height) landscape++
-    const tc = await page.getTextContent()
-    paginas.push(tc.items as ItemPdfEstruct[])
-    // Conserva los saltos de línea del PDF (hasEOL).
-    texto += textoPdfConLayout(tc.items as { str?: string; hasEOL?: boolean }[]) + '\n'
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  // El worker propio aplica el polyfill. Sin Worker (Node/pruebas) pdf.js
+  // resuelve su motor local sin necesidad de workerSrc.
+  let obrero: Worker | null = null
+  if (typeof Worker !== 'undefined') {
+    obrero = await crearObreroPdf()
+    pdfjs.GlobalWorkerOptions.workerPort = obrero
   }
-  texto = normalizarTextoExtraido(texto)
-  const orientacion = landscape > pdf.numPages / 2 ? 'landscape' : 'portrait'
-  const meta = extraerMeta(texto)
-  const { instrumentacion } = construirInstrumentacion({
-    texto, meta, nombre: file.name, mime: 'application/pdf', b64, orientacion,
-    filas: filasDePdf(paginas),
-  })
-  return { instrumentacion }
+  let pdf: Awaited<ReturnType<typeof pdfjs.getDocument>['promise']> | null = null
+  try {
+    pdf = await pdfjs.getDocument({ data: buf.slice() }).promise
+    let texto = ''
+    let landscape = 0
+    const total = Math.min(pdf.numPages, 60)
+    const paginas: ItemPdfEstruct[][] = []
+    for (let p = 1; p <= total; p++) {
+      onProgreso?.(`Leyendo PDF… página ${p}/${pdf.numPages}`)
+      const page = await pdf.getPage(p)
+      const vp = page.getViewport({ scale: 1 })
+      if (vp.width > vp.height) landscape++
+      const tc = await page.getTextContent()
+      paginas.push(tc.items as ItemPdfEstruct[])
+      // Conserva los saltos de línea del PDF (hasEOL).
+      texto += textoPdfConLayout(tc.items as { str?: string; hasEOL?: boolean }[]) + '\n'
+    }
+    texto = normalizarTextoExtraido(texto)
+    const orientacion = landscape > pdf.numPages / 2 ? 'landscape' : 'portrait'
+    const filas = filasDePdf(paginas)
+    const meta = extraerMeta(texto)
+    // Las filas posicionales separan etiqueta y valor aunque compartan línea.
+    const metaFilas = extraerMetaDeFilas(filas)
+    for (const k of ['division', 'docente', 'asignatura', 'grupo', 'periodo', 'plan', 'clave'] as const) {
+      if (metaFilas[k]) meta[k] = metaFilas[k] as string
+    }
+    const { instrumentacion } = construirInstrumentacion({
+      texto, meta, nombre: file.name, mime: 'application/pdf', b64, orientacion,
+      filas,
+    })
+    return { instrumentacion }
+  } finally {
+    if (pdf) await (pdf as unknown as { destroy(): Promise<void> }).destroy().catch(() => undefined)
+    if (obrero) {
+      pdfjs.GlobalWorkerOptions.workerPort = null
+      obrero.terminate()
+    }
+  }
 }
 
 /** Lógica compartida DOCX/PDF para competencias y confianza. */
@@ -269,6 +289,64 @@ export function extraerMetaTablas(docXml: string): Record<string, string> {
     if (out.division && out.docente && out.asignatura && out.grupo && out.periodo) break
   }
   return out
+}
+
+/**
+ * Metadatos desde los renglones del PDF: la etiqueta y su valor pueden
+ * compartir línea con otros pares (`Período: | 2026-2 | Grupo: | 1011-V`).
+ * Una celda suelta alineada con el valor anterior continúa el campo
+ * (`División:` → `Ingeniería …` → `Comunicaciones`).
+ */
+export function extraerMetaDeFilas(filas: FilaEstruct[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  const columnas = new Map<string, { x: number; fila: number }>()
+  const continuable = new Set(['division', 'docente', 'asignatura'])
+  for (let fi = 0; fi < Math.min(filas.length, 12); fi++) {
+    const f = filas[fi]
+    const celdas = f.celdas.map(sinInvisibles)
+    if (celdas.length === 1) {
+      const x = f.xs[0] ?? 0
+      let campo: string | null = null
+      for (const [c, ancla] of columnas) {
+        if (continuable.has(c) && fi - ancla.fila <= 2 && Math.abs(x - ancla.x) <= 3) campo = c
+      }
+      if (campo && /[A-Za-zÁÉÍÓÚáéíóúÑñ]/.test(celdas[0]) && !etiquetaMeta(celdas[0])) {
+        out[campo] = `${out[campo] ?? ''} ${celdas[0]}`.replace(/\s+/g, ' ').trim()
+        continue
+      }
+      continue
+    }
+    for (let i = 0; i < celdas.length; i++) {
+      const et = etiquetaMeta(celdas[i])
+      if (!et) continue
+      let valor = et.resto
+      let xValor = f.xs[i] ?? 0
+      if (!valor) {
+        const sig = celdas[i + 1]?.trim() ?? ''
+        if (sig && !etiquetaMeta(sig)) {
+          valor = sig
+          xValor = f.xs[i + 1] ?? 0
+          i++
+        }
+      }
+      const norm = normalizarCampo(et.campo, valor)
+      if (!norm || out[et.campo]) continue
+      out[et.campo] = norm
+      columnas.set(et.campo, { x: xValor, fila: fi })
+    }
+  }
+  return out
+}
+
+/** Etiqueta de metadato en una celda; admite el número de campo opcional. */
+function etiquetaMeta(celda: string): { campo: string; resto: string } | null {
+  const m = celda.trim().match(
+    /^(divisi[oó]n|docente|asignatura|grupo|per[ií]odo|plan de estudios|clave(?: de la asignatura)?)\s*:?\s*(?:\(\d+\))?\s*:?\s*(.*)$/i,
+  )
+  if (!m) return null
+  const def = META_CAMPOS.find((d) => d.claves.test(m[1]))
+  if (!def) return null
+  return { campo: def.campo, resto: m[2].trim() }
 }
 
 export function extraerMeta(t: string) {
@@ -556,6 +634,8 @@ export function extraerEvidencias(seg: string): string[] {
 
 function limpiarEvidencia(s: string, minLen = 12): string {
   const t = s
+    // pdf.js inyecta un espacio en números muy juntos (`clase 1 7` = clase 17).
+    .replace(/\b(clase|actividad)\s+(\d)\s+(\d)\b/gi, '$1 $2$3')
     .replace(/\d+\s*%\s*/g, ' ')
     .replace(/\bX\b/gi, ' ')
     .replace(/heteroevaluaci[oó]n/gi, ' ')
@@ -607,6 +687,20 @@ const TOL_FILA_PDF = 2.5
 const UMBRAL_COLUMNA_PDF = 12
 const UMBRAL_ANCHO_COL1 = 60
 const TOL_MISMA_LINEA = 0.75
+const TOL_COLUMNA_PDF = 3
+const SOPORTE_COLUMNA_PDF = 4
+
+/** Inicios de columna repetidos en la página (x con soporte en varias filas). */
+function columnasDePagina(segs: { x: number; y: number }[]): number[] {
+  const orden = [...segs].sort((a, b) => a.x - b.x)
+  const grupos: { x: number; ys: Set<number> }[] = []
+  for (const s of orden) {
+    const g = grupos[grupos.length - 1]
+    if (g && s.x - g.x <= TOL_COLUMNA_PDF) g.ys.add(s.y)
+    else grupos.push({ x: s.x, ys: new Set([s.y]) })
+  }
+  return grupos.filter((g) => g.ys.size >= SOPORTE_COLUMNA_PDF).map((g) => g.x)
+}
 
 /** Filas en orden a partir de los fragmentos de pdf.js (agrupados por y). */
 export function filasDePdf(paginas: ItemPdfEstruct[][]): FilaEstruct[] {
@@ -622,6 +716,7 @@ export function filasDePdf(paginas: ItemPdfEstruct[][]): FilaEstruct[] {
       }))
       .filter((s) => s.texto !== '')
     segs.sort((a, b) => b.y - a.y || a.x - b.x)
+    const columnas = columnasDePagina(segs)
     let actual: typeof segs = []
     let yRef = Infinity
     const vaciar = () => {
@@ -635,10 +730,21 @@ export function filasDePdf(paginas: ItemPdfEstruct[][]): FilaEstruct[] {
         const prevX = xs[xs.length - 1] ?? Infinity
         const prevW = ws[ws.length - 1] ?? 0
         if (celdas.length > 0 && s.x - (prevX + prevW) < UMBRAL_COLUMNA_PDF) {
-          const prev = celdas[celdas.length - 1]
-          celdas[celdas.length - 1] = /[\s\-–—]$/.test(prev) ? prev + s.texto : prev + ' ' + s.texto
-          ws[ws.length - 1] = s.x + s.w - prevX
-          continue
+          // Un fragmento que arranca en otra columna abre celda aunque el
+          // hueco sea corto (columnas encimadas en el PDF original).
+          const cruza = columnas.some((c) => Math.abs(c - s.x) <= TOL_COLUMNA_PDF &&
+            Math.abs(c - prevX) > TOL_COLUMNA_PDF)
+          if (!cruza) {
+            const prev = celdas[celdas.length - 1]
+            const hueco = s.x - (prevX + prevW)
+            // Números partidos por el PDF (`clase 1` + `7`): sin espacio.
+            const unirNumero = hueco >= 0 && hueco < 2.5 && /\d$/.test(prev) && /^\d+\b/.test(s.texto)
+            celdas[celdas.length - 1] = /[\s\-–—]$/.test(prev) || unirNumero
+              ? prev + s.texto
+              : prev + ' ' + s.texto
+            ws[ws.length - 1] = s.x + s.w - prevX
+            continue
+          }
         }
         celdas.push(s.texto)
         xs.push(s.x)
@@ -702,6 +808,9 @@ interface IndAcum {
   desc: string
 }
 
+/** Renglones administrativos del FO-44: no son temas ni continúan el tema previo. */
+const FILA_ADMIN = /^(?:encuadre\b|evaluaci[oó]n\s+diagn[oó]stica\b|firma\s+del\b|presentaci[oó]n\s+de(?:l)?\s+(?:sgi|encuadre)\b|(?:aplicaci[oó]n\s+de\s+)?segundas\s+oportunidades\b)/i
+
 /** Competencias a partir de filas clasificadas por estructura. */
 export function competenciasDeFilas(filas: FilaEstruct[]): Competencia[] {
   const comps: Competencia[] = []
@@ -715,6 +824,7 @@ export function competenciasDeFilas(filas: FilaEstruct[]): Competencia[] {
   let col1x = 0
   let indAbierto: IndAcum | null = null
   let matBuf = ''
+  let notaAdmin = false
   const tomarNumero = (n: string, alternativa: string) => {
     numero = numeroFinal(n, alternativa)
     const v = parseInt(numero, 10)
@@ -757,6 +867,7 @@ export function competenciasDeFilas(filas: FilaEstruct[]): Competencia[] {
     evs = []
     indAbierto = null
     matBuf = ''
+    notaAdmin = false
     modo = 'nada'
   }
   for (let fi = 0; fi < filas.length; fi++) {
@@ -875,6 +986,16 @@ export function competenciasDeFilas(filas: FilaEstruct[]): Competencia[] {
         /temas y subtemas|competencia espec|desarrollar la comp|^espec[ií]fica/i.test(izq) ||
         /^\d+\s*h(oras)?\b/i.test(izq) || /^hp\s*=/i.test(izq)) continue
       for (const tr of trozarTemas(izq)) {
+        // Notas administrativas (encuadre, segundas oportunidades): se
+        // descartan con sus continuaciones hasta el siguiente tema numerado.
+        if (FILA_ADMIN.test(tr.texto)) {
+          notaAdmin = true
+          continue
+        }
+        if (notaAdmin) {
+          if (tr.numerado) notaAdmin = false
+          else continue
+        }
         // Viñetas de otras columnas y pesos de evaluación: nunca son temas.
         const sinVineta = tr.texto.split(/[•·▪]/)[0].trim()
         if (sinVineta.length < 2 || /%|test final/i.test(sinVineta)) continue

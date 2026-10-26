@@ -11,7 +11,7 @@ import { resaltarTokens, tokensPorLinea } from '../src/infrastructure/codeHighli
 import { encajar, sanearWinAnsi } from '../src/infrastructure/pdfTheme'
 import { extraerMembretesDocx } from '../src/infrastructure/docxFullRender'
 import { esContinuacionVMerge } from '../src/infrastructure/docxFullRender'
-import { extraerMeta, extraerMetaTablas, extraerNumeroCompetencia, extraerDescripcion, extraerTemas, extraerIndicadores, extraerEvidencias, textoPdfConLayout, normalizarTextoExtraido, construirInstrumentacion, filasDeDocx, filasDePdf, competenciasDeFilas, numeroFinal, trozarTemas } from '../src/infrastructure/instrumentParser'
+import { extraerMeta, extraerMetaDeFilas, extraerMetaTablas, extraerNumeroCompetencia, extraerDescripcion, extraerTemas, extraerIndicadores, extraerEvidencias, textoPdfConLayout, normalizarTextoExtraido, construirInstrumentacion, filasDeDocx, filasDePdf, competenciasDeFilas, numeroFinal, trozarTemas } from '../src/infrastructure/instrumentParser'
 import { SECCIONES_LEGALES, TERMINOS_CLAVE, TERMINOS_VERSION, aceptacionVigente } from '../src/domain/legal'
 import { mapaDeIndicadores } from '../src/infrastructure/fo14Pdf'
 import { generarEvidenciaPDF } from '../src/infrastructure/fo14Pdf'
@@ -1087,9 +1087,23 @@ describe('instrumentación estructural en los 7 documentos', () => {
   }, 120000)
 
   it.runIf(hayRef(PDF_ADMIN))('PDF Administración: 1–5 completos y limpios', async () => {
-    const comps = competenciasDeFilas(await filasPdfReal(PDF_ADMIN as string))
+    const filas = await filasPdfReal(PDF_ADMIN as string)
+    const meta = extraerMetaDeFilas(filas)
+    expect(meta.grupo).toBe('1011-V')
+    expect(meta.periodo).toBe('2026-2')
+    expect(meta.clave).toBe('TIC-1002')
+    expect(meta.docente?.trim().split(/\s+/).length).toBeGreaterThanOrEqual(2)
+    expect(meta.asignatura?.trim().length).toBeGreaterThan(3)
+    const comps = competenciasDeFilas(filas)
     expect(comps.map((c) => c.numero)).toEqual(['1', '2', '3', '4', '5'])
     expect(comps[0].temas.join(' ')).toMatch(/1\.1 Definición de administración/)
+    // comp 1 no arrastra la fila administrativa de encuadre
+    expect(comps[0].temas.join(' ')).not.toMatch(/Encuadre de la materia/)
+    // comp 2 sin columnas vecinas pegadas
+    expect(comps[1].temas.join(' ')).not.toMatch(/Organizar y aplicar/)
+    expect(comps[1].temas.join(' ')).not.toMatch(/Calificar las evidencias/)
+    // números no partidos
+    expect(comps.map((c) => c.evidenciasSugeridas.join(' ')).join(' ')).not.toMatch(/clase 1 7/)
     expect(comps.map((c) => c.temas.join(' ')).join(' ')).not.toMatch(/Test Final|%/)
     revisarLimpieza(comps, 'pdf-admin')
   }, 120000)
@@ -1187,5 +1201,28 @@ describe('orden libre del portafolio (portada fija)', () => {
       { asignatura: 'Cálculo', division: 'Div', alumno: 'A 1', docente: 'Doc', grupo: 'G', periodo: 'P' },
     )
     expect((await PDFDocument.load(out)).getPageCount()).toBe(2)
+  })
+})
+
+describe('polyfill Promise.withResolvers (pdf.js en Safari < 17.4)', () => {
+  it('no pisa una implementación existente', async () => {
+    const { asegurarPolyfillsPdf } = await import('../src/infrastructure/pdfCompat')
+    const original = Promise.withResolvers
+    asegurarPolyfillsPdf()
+    expect(Promise.withResolvers).toBe(original)
+  })
+  it('funciona cuando se elimina', async () => {
+    const { asegurarPolyfillsPdf } = await import('../src/infrastructure/pdfCompat')
+    const original = Promise.withResolvers
+    // @ts-expect-error simulación de Safari viejo
+    delete (Promise as { withResolvers?: unknown }).withResolvers
+    asegurarPolyfillsPdf()
+    const r = Promise.withResolvers<number>()
+    expect(typeof r.resolve).toBe('function')
+    expect(typeof r.reject).toBe('function')
+    r.resolve(42)
+    expect(await r.promise).toBe(42)
+    // restaurar
+    ;(Promise as { withResolvers?: unknown }).withResolvers = original
   })
 })
