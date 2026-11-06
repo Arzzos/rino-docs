@@ -1226,3 +1226,28 @@ describe('polyfill Promise.withResolvers (pdf.js en Safari < 17.4)', () => {
     ;(Promise as { withResolvers?: unknown }).withResolvers = original
   })
 })
+
+describe('limpieza de pdf.js al parsear instrumentación (regresión destroy)', () => {
+  const fileDe = (bytes: Uint8Array, nombre: string, mime: string): File =>
+    new File([bytes.slice().buffer as ArrayBuffer], nombre, { type: mime })
+
+  it('un PDF sintético se parsea sin error de destroy', async () => {
+    const { parsearInstrumentacion } = await import('../src/infrastructure/instrumentParser')
+    const { PDFDocument } = await import('pdf-lib')
+    const doc = await PDFDocument.create()
+    doc.addPage([612, 792])
+    const bytes = await doc.save()
+    const r = await parsearInstrumentacion(fileDe(bytes, 'prueba.pdf', 'application/pdf'))
+    expect(r.instrumentacion.originalMime).toContain('pdf')
+    expect(r.instrumentacion.necesitaRevision).toBe(true)
+  }, 30000)
+
+  it.runIf(hayRef(PDF_FUND))('FO-44 Fundamentos en PDF se parsea completo', async () => {
+    const { parsearInstrumentacion } = await import('../src/infrastructure/instrumentParser')
+    const buf = readFileSync(PDF_FUND as string)
+    const r = await parsearInstrumentacion(fileDe(new Uint8Array(buf), 'fundamentos.pdf', 'application/pdf'))
+    expect(r.instrumentacion.asignatura).toMatch(/fundamentos/i)
+    expect(r.instrumentacion.competencias.map((c) => c.numero)).toEqual(['1', '2', '3', '4', '5'])
+    expect(r.instrumentacion.necesitaRevision).toBe(false)
+  }, 120000)
+})

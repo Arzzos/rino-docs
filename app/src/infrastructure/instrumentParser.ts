@@ -70,8 +70,10 @@ async function parsearPdf(buf: Uint8Array, b64: string, file: File, onProgreso?:
     pdfjs.GlobalWorkerOptions.workerPort = obrero
   }
   let pdf: Awaited<ReturnType<typeof pdfjs.getDocument>['promise']> | null = null
+  let tarea: ReturnType<typeof pdfjs.getDocument> | null = null
   try {
-    pdf = await pdfjs.getDocument({ data: buf.slice() }).promise
+    tarea = pdfjs.getDocument({ data: buf.slice() })
+    pdf = await tarea.promise
     let texto = ''
     let landscape = 0
     const total = Math.min(pdf.numPages, 60)
@@ -101,7 +103,7 @@ async function parsearPdf(buf: Uint8Array, b64: string, file: File, onProgreso?:
     })
     return { instrumentacion }
   } finally {
-    if (pdf) await (pdf as unknown as { destroy(): Promise<void> }).destroy().catch(() => undefined)
+    if (tarea) await tarea.destroy().catch(() => undefined)
     if (obrero) {
       pdfjs.GlobalWorkerOptions.workerPort = null
       obrero.terminate()

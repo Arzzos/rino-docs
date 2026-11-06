@@ -5,8 +5,9 @@ import { cargarPdfJs, crearObreroPdf } from '../infrastructure/pdfMotor'
 import { descargarPDF } from '../infrastructure/fo14Pdf'
 import Icon from './icons'
 
-// Subconjunto usado del documento pdf.js (el tipo publicado omite destroy).
-type DocPdf = PDFDocumentProxy & { destroy(): Promise<void> }
+type PdfJs = Awaited<ReturnType<typeof cargarPdfJs>>
+type TareaPdf = ReturnType<PdfJs['getDocument']>
+type DocPdf = PDFDocumentProxy
 
 // Decide el visor inicial a partir de las señales del dispositivo.
 export function debeUsarVisorPropio(coarse: boolean, tactil: boolean, uaMovil: boolean): boolean {
@@ -48,8 +49,9 @@ export default function VisorPdfMovil({ bytes, nombre }: { bytes: Uint8Array; no
   useEffect(() => {
     let vivo = true
     let doc: DocPdf | null = null
+    let tarea: TareaPdf | null = null
     let obrero: Worker | null = null
-    let motor: Awaited<ReturnType<typeof cargarPdfJs>> | null = null
+    let motor: PdfJs | null = null
     ;(async () => {
       try {
         if (bytes.length === 0) throw new Error('Documento vacío')
@@ -61,9 +63,10 @@ export default function VisorPdfMovil({ bytes, nombre }: { bytes: Uint8Array; no
         obrero = ob
         // El worker propio ya incluye el polyfill; no hace falta workerSrc.
         pdfjs.GlobalWorkerOptions.workerPort = obrero
-        doc = (await pdfjs.getDocument({ data: bytes.slice() }).promise) as unknown as DocPdf
+        tarea = pdfjs.getDocument({ data: bytes.slice() })
+        doc = await tarea.promise
         if (!vivo) {
-          await doc.destroy().catch(() => undefined)
+          await tarea.destroy().catch(() => undefined)
           obrero.terminate()
           return
         }
@@ -77,7 +80,7 @@ export default function VisorPdfMovil({ bytes, nombre }: { bytes: Uint8Array; no
     })()
     return () => {
       vivo = false
-      if (doc) void doc.destroy().catch(() => undefined)
+      if (tarea) void tarea.destroy().catch(() => undefined)
       if (obrero) {
         if (motor) motor.GlobalWorkerOptions.workerPort = null
         try { obrero.terminate() } catch { /* obrero no disponible */ }
